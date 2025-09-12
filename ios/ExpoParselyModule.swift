@@ -14,16 +14,16 @@ public class ExpoParselyModule: Module {
   private var totalActivities: Int64 = 0
   private var totalHeartbeats: Int64 = 0
   private var isScrolling = false
-  
+
   // Activity detection config
   private var enableTouchDetection = true
   private var enableScrollDetection = true
   private var touchThrottleMs: Int64 = 500
   private var scrollThrottleMs: Int64 = 2000
-  
+
   // Component tracking registry
   private var componentTrackingRegistry: [String: [String: Any]] = [:]
-  
+
   public func definition() -> ModuleDefinition {
     Name("ExpoParsely")
 
@@ -108,59 +108,100 @@ public class ExpoParselyModule: Module {
       }
     }
 
+    // Video tracking methods
+    Function("trackPlay") { (url: String, videoMetadata: [String: Any], urlRef: String?, extraData: [String: Any]?, siteId: String?) in
+      do {
+        guard let urlObj = URL(string: url) else {
+          print("ExpoParsely: Invalid URL: \(url)")
+          return
+        }
+        Parsely.sharedInstance.trackPlay(url: urlObj, urlRef: urlRef.flatMap(URL.init), videoMetadata: videoMetadata)
+        self.recordActivity()
+      } catch {
+        print("ExpoParsely trackPlay error: \(error.localizedDescription)")
+      }
+    }
 
+    Function("trackPause") {
+      do {
+        Parsely.sharedInstance.trackPause()
+      } catch {
+        print("ExpoParsely trackPause error: \(error.localizedDescription)")
+      }
+    }
+
+    Function("resetVideo") {
+      do {
+        Parsely.sharedInstance.resetVideo()
+      } catch {
+        print("ExpoParsely resetVideo error: \(error.localizedDescription)")
+      }
+    }
+
+    // Heartbeat status methods
+    Function("getHeartbeatStatus") { () -> [String: Any] in
+      return self.getHeartbeatStatusInternal()
+    }
+
+    Function("startHeartbeatTracking") {
+      self.startHeartbeatTrackingInternal()
+    }
+
+    Function("stopHeartbeatTracking") {
+      self.stopHeartbeatTrackingInternal()
+    }
   }
-  
+
   // MARK: - Private Methods
-  
+
   private func recordActivity() {
     lastActivityTime = Int64(Date().timeIntervalSince1970 * 1000)
     totalActivities += 1
   }
-  
+
   private func checkHeartbeat() {
     guard isHeartbeatActive else { return }
-    
+
     let currentTime = Int64(Date().timeIntervalSince1970 * 1000)
     let timeSinceActivity = currentTime - lastActivityTime
     let sessionDuration = currentTime - sessionStartTime
-    
+
     // Check if user has been inactive for too long
     if timeSinceActivity > inactivityThresholdMs {
       stopHeartbeatTrackingInternal()
       return
     }
-    
+
     // Check if session has exceeded max duration
     if sessionDuration > maxDurationMs {
       stopHeartbeatTrackingInternal()
       return
     }
-    
+
     // Send heartbeat
     totalHeartbeats += 1
   }
-  
+
   private func startHeartbeatTrackingInternal() {
     if self.isHeartbeatActive { return }
-    
+
     self.isHeartbeatActive = true
     let currentTime = Int64(Date().timeIntervalSince1970 * 1000)
     self.sessionStartTime = currentTime
     self.lastActivityTime = currentTime
-    
+
     let interval = TimeInterval(self.heartbeatIntervalMs) / 1000.0
     self.heartbeatTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
       self.checkHeartbeat()
     }
   }
-  
+
   private func stopHeartbeatTrackingInternal() {
     isHeartbeatActive = false
     heartbeatTimer?.invalidate()
     heartbeatTimer = nil
   }
-  
+
   private func getHeartbeatStatusInternal() -> [String: Any] {
     let currentTime = Int64(Date().timeIntervalSince1970 * 1000)
     return [
@@ -171,17 +212,17 @@ public class ExpoParselyModule: Module {
       "totalHeartbeats": self.totalHeartbeats
     ]
   }
-  
+
   private func registerComponentTrackingInternal(config: [String: Any]) -> String {
     let trackingId = UUID().uuidString
     self.componentTrackingRegistry[trackingId] = config
     return trackingId
   }
-  
+
   private func unregisterComponentTrackingInternal(trackingId: String) {
     self.componentTrackingRegistry.removeValue(forKey: trackingId)
   }
-  
+
   private func setScrollStateInternal(scrolling: Bool) {
     if self.enableScrollDetection {
       self.isScrolling = scrolling
@@ -190,7 +231,7 @@ public class ExpoParselyModule: Module {
       }
     }
   }
-  
+
   private func isCurrentlyScrollingInternal() -> Bool {
     return self.isScrolling
   }

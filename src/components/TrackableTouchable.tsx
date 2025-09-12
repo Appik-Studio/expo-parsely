@@ -58,7 +58,7 @@ const TrackableTouchable = forwardRef<View, TrackableTouchableProps>(
 
         onPress?.(event)
       },
-      [, trackingId, elementTracking, onPress]
+      [trackingId, elementTracking, onPress]
     )
 
     return <TouchableOpacity ref={ref} onPress={handlePress} {...props} />

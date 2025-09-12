@@ -1,17 +1,18 @@
-import { useEffect, useRef } from "react";
-import ExpoParsely from "../ExpoParselyModule";
-import type { TrackingHierarchyConfig } from "../ExpoParsely.types";
+import { useEffect, useRef } from 'react'
+
+import type { TrackingHierarchyConfig } from '../ExpoParsely.types'
+import ExpoParsely from '../ExpoParselyModule'
 
 export interface UseTrackingHierarchyOptions extends TrackingHierarchyConfig {
   /** Whether to disable tracking for this component */
-  disabled?: boolean;
+  disabled?: boolean
 }
 
 export interface UseTrackingHierarchyReturn {
   /** The tracking ID assigned to this component */
-  trackingId: string;
+  trackingId: string
   /** Whether the component is currently registered */
-  isRegistered: boolean;
+  isRegistered: boolean
 }
 
 /**
@@ -24,20 +25,20 @@ export const useTrackingHierarchy = ({
   accessibilityLabel,
   trackingId,
   props,
-  disabled = false,
+  disabled = false
 }: UseTrackingHierarchyOptions): UseTrackingHierarchyReturn => {
-  const registeredTrackingId = useRef<string>("");
-  const isRegisteredRef = useRef(false);
+  const registeredTrackingId = useRef<string>('')
+  const isRegisteredRef = useRef(false)
 
   useEffect(() => {
     if (disabled) {
       // If disabled, unregister if previously registered
       if (isRegisteredRef.current && registeredTrackingId.current) {
-        ExpoParsely.unregisterComponentTracking(registeredTrackingId.current);
-        registeredTrackingId.current = "";
-        isRegisteredRef.current = false;
+        ExpoParsely.unregisterComponentTracking(registeredTrackingId.current)
+        registeredTrackingId.current = ''
+        isRegisteredRef.current = false
       }
-      return;
+      return
     }
 
     // Register the component
@@ -46,27 +47,26 @@ export const useTrackingHierarchy = ({
       testID,
       accessibilityLabel,
       trackingId,
-      props,
-    };
+      props
+    }
 
-    registeredTrackingId.current =
-      ExpoParsely.registerComponentTracking(config);
-    isRegisteredRef.current = true;
+    registeredTrackingId.current = ExpoParsely.registerComponentTracking(config)
+    isRegisteredRef.current = true
 
     // Cleanup on unmount
     return () => {
       if (registeredTrackingId.current) {
-        ExpoParsely.unregisterComponentTracking(registeredTrackingId.current);
-        registeredTrackingId.current = "";
-        isRegisteredRef.current = false;
+        ExpoParsely.unregisterComponentTracking(registeredTrackingId.current)
+        registeredTrackingId.current = ''
+        isRegisteredRef.current = false
       }
-    };
-  }, [componentName, testID, accessibilityLabel, trackingId, props, disabled]);
+    }
+  }, [componentName, testID, accessibilityLabel, trackingId, props, disabled])
 
   return {
     trackingId: registeredTrackingId.current,
-    isRegistered: isRegisteredRef.current,
-  };
-};
+    isRegistered: isRegisteredRef.current
+  }
+}
 
-export default useTrackingHierarchy;
+export default useTrackingHierarchy
