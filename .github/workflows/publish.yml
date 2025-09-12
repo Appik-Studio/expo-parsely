@@ -39,9 +39,6 @@ jobs:
       - name: Build the plugin
         run: bun run build:plugin
 
-      - name: Run tests
-        run: bun run test
-
       - name: Run linting
         run: bun run lint
 

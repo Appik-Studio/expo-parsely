@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react'
-import { useHeartbeat } from './useHeartbeat'
+import { useCallback, useEffect, useState } from 'react'
+
+import ExpoParsely from '../ExpoParselyModule'
 
 interface HeartbeatDebugStats {
   isActive: boolean
@@ -15,24 +16,27 @@ interface UseHeartbeatDebugReturn {
 }
 
 export const useHeartbeatDebug = (): UseHeartbeatDebugReturn => {
-  const heartbeatHook = useHeartbeat({
-    enabled: true,
-    heartbeatConfig: {
-      enableHeartbeats: true,
-      inactivityThresholdMs: 5000,
-      intervalMs: 150000,
-    },
-    activityConfig: {
-      enableTouchDetection: true,
-      enableScrollDetection: true,
-    }
+  const [status, setStatus] = useState({
+    isActive: false,
+    lastActivity: 0,
+    sessionDuration: 0,
+    totalActivities: 0,
+    totalHeartbeats: 0
   })
-
   const [startTime] = useState(Date.now())
-  
-  // Extract status and determine if active based on recent activity
-  const status = heartbeatHook.status
-  const isActive = status.lastActivity > 0 && (Date.now() - status.lastActivity) < 5000
+
+  // Poll heartbeat status from the main system
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const currentStatus = ExpoParsely.getHeartbeatStatus()
+      setStatus(currentStatus)
+    }, 1000) // Poll every second
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Determine if active based on recent activity (within last 5 seconds)
+  const isActive = status.lastActivity > 0 && Date.now() - status.lastActivity < 5000
 
   const formatLastActivity = useCallback((timestamp: number): string => {
     if (!timestamp) return 'Never'
@@ -45,10 +49,8 @@ export const useHeartbeatDebug = (): UseHeartbeatDebugReturn => {
   }, [])
 
   const resetStats = useCallback(() => {
-    // Note: This would ideally reset the actual heartbeat stats
-    // For now, it's a placeholder - the actual reset would need to be implemented
-    // in the native module
-    console.log('💓 [HeartbeatDebug] Reset stats requested')
+    // Note: Reset functionality would need to be implemented in the native module
+    console.log('💓 [HeartbeatDebug] Reset stats requested - not yet implemented')
   }, [])
 
   const stats: HeartbeatDebugStats = {

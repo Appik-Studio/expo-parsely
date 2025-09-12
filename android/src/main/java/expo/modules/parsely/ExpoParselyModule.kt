@@ -23,17 +23,17 @@ class ExpoParselyModule : Module() {
   private var totalActivities: Long = 0
   private var totalHeartbeats: Long = 0
   private var isScrolling = false
-  
+
   // Activity detection config - aligned with Parse.ly methodology
   private var enableTouchDetection = true
   private var enableScrollDetection = true // Parse.ly: scroll events are engagement
   private var touchThrottleMs: Long = 500
   private var scrollThrottleMs: Long = 2000
   private var scrollThreshold: Int = 5
-  
+
   // Component tracking registry
   private val componentTrackingRegistry = ConcurrentHashMap<String, Map<String, Any>>()
-  
+
   override fun definition() = ModuleDefinition {
     Name("ExpoParsely")
 
@@ -42,7 +42,7 @@ class ExpoParselyModule : Module() {
         val context = requireNotNull(appContext.reactContext)
         val flushIntervalSeconds = flushInterval ?: 150 // Parse.ly default: 150s
         val isDryRun = dryRun ?: false
-        
+
         // TODO: Replace with actual Parsely SDK call when available:
         // ParselyTracker.init(siteId, flushIntervalSeconds, context, isDryRun)
         println("ExpoParsely init: siteId=$siteId, flushInterval=$flushIntervalSeconds, dryRun=$isDryRun")
@@ -89,34 +89,34 @@ class ExpoParselyModule : Module() {
 
     // Enhanced Heartbeat and Activity Detection Implementation
     Function("configureHeartbeat") { config: Map<String, Any> ->
-      config["enableHeartbeats"]?.let { 
+      config["enableHeartbeats"]?.let {
         // Configuration is stored but heartbeat enabling is handled by start/stop methods
       }
-      config["inactivityThresholdMs"]?.let { 
+      config["inactivityThresholdMs"]?.let {
         inactivityThresholdMs = (it as? Number)?.toLong() ?: inactivityThresholdMs
       }
-      config["intervalMs"]?.let { 
+      config["intervalMs"]?.let {
         heartbeatIntervalMs = (it as? Number)?.toLong() ?: heartbeatIntervalMs
       }
-      config["maxDurationMs"]?.let { 
+      config["maxDurationMs"]?.let {
         maxDurationMs = (it as? Number)?.toLong() ?: maxDurationMs
       }
     }
 
     Function("configureActivityDetection") { config: Map<String, Any> ->
-      config["enableTouchDetection"]?.let { 
+      config["enableTouchDetection"]?.let {
         enableTouchDetection = it as? Boolean ?: enableTouchDetection
       }
-      config["enableScrollDetection"]?.let { 
+      config["enableScrollDetection"]?.let {
         enableScrollDetection = it as? Boolean ?: enableScrollDetection
       }
-      config["touchThrottleMs"]?.let { 
+      config["touchThrottleMs"]?.let {
         touchThrottleMs = (it as? Number)?.toLong() ?: touchThrottleMs
       }
-      config["scrollThrottleMs"]?.let { 
+      config["scrollThrottleMs"]?.let {
         scrollThrottleMs = (it as? Number)?.toLong() ?: scrollThrottleMs
       }
-      config["scrollThreshold"]?.let { 
+      config["scrollThreshold"]?.let {
         scrollThreshold = (it as? Number)?.toInt() ?: scrollThreshold
       }
     }
@@ -138,60 +138,103 @@ class ExpoParselyModule : Module() {
       }
     }
 
+    // Video tracking methods
+    Function("trackPlay") { url: String, videoMetadata: Map<String, Any>, urlRef: String?, extraData: Map<String, Any>?, siteId: String? ->
+      try {
+        // TODO: Replace with actual Parsely SDK call when available:
+        // ParselyTracker.sharedInstance.trackPlay(url, urlRef, videoMetadata)
+        println("ExpoParsely trackPlay: url=$url, videoMetadata=$videoMetadata, urlRef=$urlRef")
+        recordActivity()
+      } catch (e: Exception) {
+        println("ExpoParsely trackPlay error: ${e.message}")
+      }
+    }
 
+    Function("trackPause") {
+      try {
+        // TODO: Replace with actual Parsely SDK call when available:
+        // ParselyTracker.sharedInstance.trackPause()
+        println("ExpoParsely trackPause")
+      } catch (e: Exception) {
+        println("ExpoParsely trackPause error: ${e.message}")
+      }
+    }
+
+    Function("resetVideo") {
+      try {
+        // TODO: Replace with actual Parsely SDK call when available:
+        // ParselyTracker.sharedInstance.resetVideo()
+        println("ExpoParsely resetVideo")
+      } catch (e: Exception) {
+        println("ExpoParsely resetVideo error: ${e.message}")
+      }
+    }
+
+    // Heartbeat status methods
+    Function("getHeartbeatStatus") { ->
+      getHeartbeatStatusInternal()
+    }
+
+    Function("startHeartbeatTracking") {
+      startHeartbeatTrackingInternal()
+    }
+
+    Function("stopHeartbeatTracking") {
+      stopHeartbeatTrackingInternal()
+    }
   }
-  
+
   private fun startHeartbeatTrackingInternal() {
     if (isHeartbeatActive) return
-    
+
     isHeartbeatActive = true
     sessionStartTime = System.currentTimeMillis()
     lastActivityTime = System.currentTimeMillis()
-    
+
     heartbeatHandler = Handler(Looper.getMainLooper())
     heartbeatRunnable = object : Runnable {
       override fun run() {
         if (!isHeartbeatActive) return
-        
+
         val currentTime = System.currentTimeMillis()
         val timeSinceActivity = currentTime - lastActivityTime
         val sessionDuration = currentTime - sessionStartTime
-        
+
         // Check if user has been inactive for too long
         if (timeSinceActivity > inactivityThresholdMs) {
           stopHeartbeatTrackingInternal()
           return
         }
-        
+
         // Check if session has exceeded max duration
         if (sessionDuration > maxDurationMs) {
           stopHeartbeatTrackingInternal()
           return
         }
-        
+
         // Send heartbeat (could be implemented as a custom event if needed)
         totalHeartbeats++
-        
+
         // Schedule next heartbeat
         heartbeatHandler?.postDelayed(this, heartbeatIntervalMs)
       }
     }
-    
+
     heartbeatHandler?.postDelayed(heartbeatRunnable!!, heartbeatIntervalMs)
   }
-  
+
   private fun stopHeartbeatTrackingInternal() {
     isHeartbeatActive = false
     heartbeatRunnable?.let { heartbeatHandler?.removeCallbacks(it) }
     heartbeatHandler = null
     heartbeatRunnable = null
   }
-  
+
   private fun recordActivity() {
     lastActivityTime = System.currentTimeMillis()
     totalActivities++
   }
-  
+
   private fun getHeartbeatStatusInternal(): Map<String, Any> {
     return mapOf(
       "isActive" to isHeartbeatActive,
@@ -201,17 +244,17 @@ class ExpoParselyModule : Module() {
       "totalHeartbeats" to totalHeartbeats
     )
   }
-  
+
   private fun registerComponentTrackingInternal(config: Map<String, Any>): String {
     val trackingId = UUID.randomUUID().toString()
     componentTrackingRegistry[trackingId] = config
     return trackingId
   }
-  
+
   private fun unregisterComponentTrackingInternal(trackingId: String) {
     componentTrackingRegistry.remove(trackingId)
   }
-  
+
   private fun setScrollStateInternal(scrolling: Boolean) {
     if (enableScrollDetection) {
       isScrolling = scrolling
@@ -220,11 +263,11 @@ class ExpoParselyModule : Module() {
       }
     }
   }
-  
+
   private fun isCurrentlyScrollingInternal(): Boolean {
     return isScrolling
   }
-  
+
   private fun getPreferences(): SharedPreferences {
     val context = requireNotNull(appContext.reactContext)
     return context.getSharedPreferences("expo_parsely_preferences", Context.MODE_PRIVATE)

@@ -1,13 +1,17 @@
-import { requireNativeModule } from "expo-modules-core";
+import { requireNativeModule } from 'expo-modules-core'
+
 import type {
   ActivityDetectionConfig,
   ExtraData,
-  HeartbeatConfig, HeartbeatStatus,
-  ParselyMetadata, ParselyVideoMetadata, TrackingHierarchyConfig,
-} from "./ExpoParsely.types";
+  HeartbeatConfig,
+  HeartbeatStatus,
+  ParselyMetadata,
+  ParselyVideoMetadata,
+  TrackingHierarchyConfig
+} from './ExpoParsely.types'
 
 interface NativeModule {
-  init(siteId: string, flushInterval?: number, dryRun?: boolean): void;
+  init(siteId: string, flushInterval?: number, dryRun?: boolean): void
 
   trackPageView(
     url: string,
@@ -15,16 +19,11 @@ interface NativeModule {
     metadata?: ParselyMetadata,
     extraData?: ExtraData,
     siteId?: string
-  ): void;
+  ): void
 
-  startEngagement(
-    url: string,
-    urlRef?: string,
-    extraData?: ExtraData,
-    siteId?: string
-  ): void;
+  startEngagement(url: string, urlRef?: string, extraData?: ExtraData, siteId?: string): void
 
-  stopEngagement(): void;
+  stopEngagement(): void
 
   trackPlay(
     url: string,
@@ -32,51 +31,43 @@ interface NativeModule {
     urlRef?: string,
     extraData?: ExtraData,
     siteId?: string
-  ): void;
+  ): void
 
-  trackPause(): void;
+  trackPause(): void
 
-  resetVideo(): void;
+  resetVideo(): void
 
   // Enhanced Heartbeat and Activity Detection
-  configureHeartbeat(config: HeartbeatConfig): void;
+  configureHeartbeat(config: HeartbeatConfig): void
 
-  configureActivityDetection(config: ActivityDetectionConfig): void;
+  configureActivityDetection(config: ActivityDetectionConfig): void
 
-  recordActivity(): void;
+  recordActivity(): void
 
-  getHeartbeatStatus(): HeartbeatStatus;
+  getHeartbeatStatus(): HeartbeatStatus
 
-  startHeartbeatTracking(): void;
+  startHeartbeatTracking(): void
 
-  stopHeartbeatTracking(): void;
+  stopHeartbeatTracking(): void
 
   // Element and Component Tracking
-  trackElement(
-    action: string,
-    elementType: string,
-    elementId: string,
-    location: string
-  ): void;
+  trackElement(action: string, elementType: string, elementId: string, location: string): void
 
-  registerComponentTracking(config: TrackingHierarchyConfig): string;
+  registerComponentTracking(config: TrackingHierarchyConfig): string
 
-  unregisterComponentTracking(trackingId: string): void;
+  unregisterComponentTracking(trackingId: string): void
 
   // Scroll and Touch Detection
-  setScrollState(isScrolling: boolean): void;
+  setScrollState(isScrolling: boolean): void
 
-  isCurrentlyScrolling(): boolean;
+  isCurrentlyScrolling(): boolean
 }
 
-const nativeModule = requireNativeModule<NativeModule>("ExpoParsely");
+const nativeModule = requireNativeModule<NativeModule>('ExpoParsely')
 
 class ExpoParsely {
-  static init(
-    siteId: string,
-    options?: { flushInterval?: number; dryRun?: boolean }
-  ): void {
-    nativeModule.init(siteId, options?.flushInterval, options?.dryRun);
+  static init(siteId: string, options?: { flushInterval?: number; dryRun?: boolean }): void {
+    nativeModule.init(siteId, options?.flushInterval, options?.dryRun)
   }
 
   static trackPageView(
@@ -86,7 +77,7 @@ class ExpoParsely {
     extraData?: ExtraData,
     siteId?: string
   ): void {
-    nativeModule.trackPageView(url, urlRef, metadata, extraData, siteId);
+    nativeModule.trackPageView(url, urlRef, metadata, extraData, siteId)
   }
 
   static startEngagement(
@@ -95,37 +86,55 @@ class ExpoParsely {
     extraData?: ExtraData,
     siteId?: string
   ): void {
-    nativeModule.startEngagement(url, urlRef, extraData, siteId);
+    nativeModule.startEngagement(url, urlRef, extraData, siteId)
   }
 
   static stopEngagement(): void {
-    nativeModule.stopEngagement();
+    nativeModule.stopEngagement()
   }
 
+  // Video tracking methods
+  static trackPlay(
+    url: string,
+    videoMetadata: ParselyVideoMetadata,
+    urlRef?: string,
+    extraData?: ExtraData,
+    siteId?: string
+  ): void {
+    nativeModule.trackPlay(url, videoMetadata, urlRef, extraData, siteId)
+  }
+
+  static trackPause(): void {
+    nativeModule.trackPause()
+  }
+
+  static resetVideo(): void {
+    nativeModule.resetVideo()
+  }
 
   // Enhanced Heartbeat Methods
   static configureHeartbeat(config: HeartbeatConfig): void {
-    nativeModule.configureHeartbeat(config);
+    nativeModule.configureHeartbeat(config)
   }
 
   static configureActivityDetection(config: ActivityDetectionConfig): void {
-    nativeModule.configureActivityDetection(config);
+    nativeModule.configureActivityDetection(config)
   }
 
   static recordActivity(): void {
-    nativeModule.recordActivity();
+    nativeModule.recordActivity()
   }
 
   static getHeartbeatStatus(): HeartbeatStatus {
-    return nativeModule.getHeartbeatStatus();
+    return nativeModule.getHeartbeatStatus()
   }
 
   static startHeartbeatTracking(): void {
-    nativeModule.startHeartbeatTracking();
+    nativeModule.startHeartbeatTracking()
   }
 
   static stopHeartbeatTracking(): void {
-    nativeModule.stopHeartbeatTracking();
+    nativeModule.stopHeartbeatTracking()
   }
 
   // Element and Component Tracking Methods
@@ -135,25 +144,25 @@ class ExpoParsely {
     elementId: string,
     location: string
   ): void {
-    nativeModule.trackElement(action, elementType, elementId, location);
+    nativeModule.trackElement(action, elementType, elementId, location)
   }
 
   static registerComponentTracking(config: TrackingHierarchyConfig): string {
-    return nativeModule.registerComponentTracking(config);
+    return nativeModule.registerComponentTracking(config)
   }
 
   static unregisterComponentTracking(trackingId: string): void {
-    nativeModule.unregisterComponentTracking(trackingId);
+    nativeModule.unregisterComponentTracking(trackingId)
   }
 
   // Scroll and Touch Detection Methods
   static setScrollState(isScrolling: boolean): void {
-    nativeModule.setScrollState(isScrolling);
+    nativeModule.setScrollState(isScrolling)
   }
 
   static isCurrentlyScrolling(): boolean {
-    return nativeModule.isCurrentlyScrolling();
+    return nativeModule.isCurrentlyScrolling()
   }
 }
 
-export default ExpoParsely;
+export default ExpoParsely

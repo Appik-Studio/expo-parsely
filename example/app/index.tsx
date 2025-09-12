@@ -1,6 +1,6 @@
-import ExpoParsely, { TrackableTouchable, useElementTracking } from "expo-parsely";
-import { useEffect } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import ExpoParsely, {TrackableTouchable, useElementTracking} from "expo-parsely";
+import {useEffect} from "react";
+import {Alert, ScrollView, Text, View} from "react-native";
 import styles from "./styles";
 
 const HomePage = () => {
