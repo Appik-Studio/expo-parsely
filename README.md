@@ -105,7 +105,29 @@ Add the plugin to your `app.json` or `app.config.js`:
 
 ## 📖 Usage
 
-### Basic Setup
+### 🚀 Quick Start with ParselyProvider (Recommended)
+
+The easiest way to get started is with the `ParselyProvider` component that handles everything automatically:
+
+```typescript
+import { ParselyProvider } from '@appik-studio/expo-parsely'
+
+export default function App() {
+  return (
+    <ParselyProvider
+      siteId="your-site-id"
+      autoInitialize={true}
+      enableDebugLogging={__DEV__}
+    >
+      {/* Your app content */}
+    </ParselyProvider>
+  );
+}
+```
+
+### Manual Setup
+
+If you prefer manual control:
 
 ```typescript
 import ExpoParsely from '@appik-studio/expo-parsely'
@@ -375,6 +397,46 @@ Enhanced TouchableOpacity with automatic tracking capabilities.
 - `trackViews?: boolean` - Track views when visible
 - `viewThreshold?: number` - Time threshold for "viewed" (ms)
 
+#### ParselyProvider
+
+Comprehensive provider component that automatically handles Parse.ly initialization, heartbeat tracking, activity detection, and navigation tracking.
+
+**Props:**
+- `siteId?: string` - Your Parse.ly site identifier
+- `autoInitialize?: boolean` - Whether to auto-initialize the SDK (default: true)
+- `flushInterval?: number` - Flush interval in seconds (default: 150)
+- `dryRun?: boolean` - Whether to run in dry-run mode (default: false)
+- `enableDebugLogging?: boolean` - Enable debug logging (default: false)
+- `heartbeatConfig?: HeartbeatConfig` - Heartbeat configuration
+- `activityDetectionConfig?: ActivityDetectionConfig` - Activity detection configuration
+- `navigationTracking?: NavigationTrackingConfig` - Navigation tracking configuration
+
+**Usage:**
+```typescript
+import { ParselyProvider } from '@appik-studio/expo-parsely'
+
+export default function App() {
+  return (
+    <ParselyProvider
+      siteId="your-site-id"
+      heartbeatConfig={{
+        enableHeartbeats: true,
+        inactivityThresholdMs: 30000,
+        intervalMs: 10000,
+        maxDurationMs: 7200000
+      }}
+      navigationTracking={{
+        enabled: true,
+        trackPageViews: true,
+        trackScreens: true
+      }}
+    >
+      {/* Your app content */}
+    </ParselyProvider>
+  );
+}
+```
+
 #### HeartbeatDebugOverlay
 
 Development overlay for real-time heartbeat and activity monitoring.
@@ -421,6 +483,96 @@ Hook for component hierarchy tracking.
 
 **Returns:**
 - `trackingId: string` - Generated tracking ID for the component
+
+#### useNavigationTracking(options?: NavigationTrackingOptions)
+
+Hook for automatic navigation tracking with Expo Router. Automatically tracks page views and screen changes when navigation occurs.
+
+**Options:**
+- `enabled?: boolean` - Whether to enable navigation tracking (default: true)
+- `trackPageViews?: boolean` - Whether to track page views (default: true)
+- `trackScreens?: boolean` - Whether to track screen changes (default: true)
+- `urlPrefix?: string` - URL prefix for page views (default: 'https://app')
+- `screenNameFormatter?: (pathname, params) => string` - Custom screen name formatter
+- `debug?: boolean` - Enable debug logging (default: false)
+
+**Usage:**
+```typescript
+import { useNavigationTracking } from '@appik-studio/expo-parsely'
+
+function AppLayout() {
+  useNavigationTracking({
+    enabled: true,
+    trackPageViews: true,
+    trackScreens: true,
+    debug: __DEV__
+  });
+
+  return <YourAppContent />;
+}
+```
+
+Let me search for `trackPageViews` and `trackScreens` in your codebase to understand how they're implemented and their differences:
+
+[5 tools called]
+
+Based on your codebase, here's the difference between `trackPageViews` and `trackScreens`:
+
+## **`trackScreen`** (Higher-level abstraction)
+- **Location**: `useMobileAnalytics.ts`
+- **Purpose**: Mobile-specific screen tracking wrapper
+- **Implementation**: Calls `ExpoParsely.trackPageView()` internally
+- **Usage**: Used for React Native screen navigation tracking
+
+```typescript
+const trackScreen = useCallback((context?: Partial<AnalyticsContext>) => {
+  if (context?.url) {
+    ExpoParsely.trackPageView(context.url, undefined, {
+      section: context.title || 'Unknown',
+      title: context.title || ''
+    })
+  }
+}, [])
+```
+
+## **`trackPageView`** (Lower-level Parse.ly SDK method)
+- **Location**: Parse.ly native SDK (`ExpoParsely.trackPageView()`)
+- **Purpose**: Direct Parse.ly analytics tracking
+- **Implementation**: Native Parse.ly SDK call
+- **Usage**: Lower-level API for page view events
+
+## **Key Differences:**
+
+| Aspect | `trackScreen` | `trackPageView` |
+|--------|---------------|-----------------|
+| **Level** | High-level wrapper | Low-level SDK method |
+| **Context** | Mobile screens/navigation | Web pages/content |
+| **Usage** | React Native app screens | Direct Parse.ly tracking |
+| **Parameters** | Takes `AnalyticsContext` object | Direct Parse.ly parameters |
+| **Implementation** | Calls `trackPageView` internally | Native SDK call |
+
+## **Additional Context:**
+
+You also have a **`trackPage`** function in your analytics service (`services/analytics/index.ts`) which is used for the general analytics system (Piano Analytics + Parse.ly) and handles both Piano and Parse.ly tracking through plugins.
+
+**Usage Pattern:**
+- Use `trackScreen` for mobile app screen changes
+- Use `trackPage` for general page tracking through your analytics service
+- `trackPageView` is called automatically by these higher-level functions
+
+#### withNavigationTracking(Component, options)
+
+Higher-order component that automatically wraps a screen component with navigation tracking.
+
+**Usage:**
+```typescript
+import { withNavigationTracking } from '@appik-studio/expo-parsely'
+
+const TrackedScreen = withNavigationTracking(YourScreenComponent, {
+  trackPageViews: true,
+  debug: __DEV__
+});
+```
 
 #### useHeartbeatDebug()
 
@@ -474,6 +626,15 @@ interface TrackingHierarchyConfig {
   accessibilityLabel?: string;
   trackingId?: string;
   props?: Record<string, any>;
+}
+
+interface NavigationTrackingOptions {
+  enabled?: boolean;
+  trackPageViews?: boolean;
+  trackScreens?: boolean;
+  urlPrefix?: string;
+  screenNameFormatter?: (pathname: string, params?: Record<string, any>) => string;
+  debug?: boolean;
 }
 ```
 

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+
 import { useHeartbeat } from './useHeartbeat'
 
 interface HeartbeatDebugStats {
@@ -20,19 +21,19 @@ export const useHeartbeatDebug = (): UseHeartbeatDebugReturn => {
     heartbeatConfig: {
       enableHeartbeats: true,
       inactivityThresholdMs: 5000,
-      intervalMs: 150000,
+      intervalMs: 150000
     },
     activityConfig: {
       enableTouchDetection: true,
-      enableScrollDetection: true,
+      enableScrollDetection: true
     }
   })
 
   const [startTime] = useState(Date.now())
-  
+
   // Extract status and determine if active based on recent activity
   const status = heartbeatHook.status
-  const isActive = status.lastActivity > 0 && (Date.now() - status.lastActivity) < 5000
+  const isActive = status.lastActivity > 0 && Date.now() - status.lastActivity < 5000
 
   const formatLastActivity = useCallback((timestamp: number): string => {
     if (!timestamp) return 'Never'

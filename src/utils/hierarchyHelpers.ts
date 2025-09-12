@@ -4,32 +4,32 @@
  */
 
 export interface ElementInfo {
-  componentName: string;
-  testID?: string;
-  accessibilityLabel?: string;
-  trackingId?: string;
-  props?: Record<string, any>;
+  componentName: string
+  testID?: string
+  accessibilityLabel?: string
+  trackingId?: string
+  props?: Record<string, any>
 }
 
 export interface HierarchyPosition {
   /** CSS-like nth-child positions */
-  nthChild: number[];
+  nthChild: number[]
   /** Positions among siblings of same component type */
-  sameTagIndex: number[];
+  sameTagIndex: number[]
 }
 
 export interface ElementPosition {
   /** Element bounding rectangle */
   boundingRect?: {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-    width: number;
-    height: number;
-  };
+    left: number
+    right: number
+    top: number
+    bottom: number
+    width: number
+    height: number
+  }
   /** Hierarchy position data */
-  hierarchy: HierarchyPosition;
+  hierarchy: HierarchyPosition
 }
 
 /**
@@ -42,20 +42,20 @@ export const calculateNthChildPosition = (
   element: ElementInfo,
   hierarchy: ElementInfo[]
 ): number[] => {
-  const positions: number[] = [];
-  const elementIndex = hierarchy.findIndex(h => h === element);
+  const positions: number[] = []
+  const elementIndex = hierarchy.findIndex(h => h === element)
 
   if (elementIndex >= 0) {
     // Calculate position among all siblings at each level
     for (let depth = 0; depth <= elementIndex; depth++) {
-      const siblings = hierarchy.slice(0, depth + 1);
-      const position = siblings.filter(h => h.componentName === element.componentName).length;
-      positions.push(position);
+      const siblings = hierarchy.slice(0, depth + 1)
+      const position = siblings.filter(h => h.componentName === element.componentName).length
+      positions.push(position)
     }
   }
 
-  return positions;
-};
+  return positions
+}
 
 /**
  * Calculate same-tag index positions for an element
@@ -67,24 +67,24 @@ export const calculateSameTagNthChild = (
   element: ElementInfo,
   hierarchy: ElementInfo[]
 ): number[] => {
-  const positions: number[] = [];
-  const elementIndex = hierarchy.findIndex(h => h === element);
+  const positions: number[] = []
+  const elementIndex = hierarchy.findIndex(h => h === element)
 
   if (elementIndex >= 0) {
     // Count occurrences of same component type up to current element
-    let sameTagCount = 0;
+    let sameTagCount = 0
     for (let i = 0; i <= elementIndex; i++) {
       if (hierarchy[i].componentName === element.componentName) {
-        sameTagCount++;
+        sameTagCount++
         if (i === elementIndex) {
-          positions.push(sameTagCount);
+          positions.push(sameTagCount)
         }
       }
     }
   }
 
-  return positions;
-};
+  return positions
+}
 
 /**
  * Get comprehensive position data for an element
@@ -96,16 +96,23 @@ export const calculateSameTagNthChild = (
 export const getElementPosition = (
   element: ElementInfo,
   hierarchy: ElementInfo[],
-  boundingRect?: { left: number; right: number; top: number; bottom: number; width: number; height: number }
+  boundingRect?: {
+    left: number
+    right: number
+    top: number
+    bottom: number
+    width: number
+    height: number
+  }
 ): ElementPosition => {
   return {
     boundingRect,
     hierarchy: {
       nthChild: calculateNthChildPosition(element, hierarchy),
-      sameTagIndex: calculateSameTagNthChild(element, hierarchy),
-    },
-  };
-};
+      sameTagIndex: calculateSameTagNthChild(element, hierarchy)
+    }
+  }
+}
 
 /**
  * Extract tracking IDs from hierarchy for analytics
@@ -113,10 +120,8 @@ export const getElementPosition = (
  * @returns Array of tracking IDs
  */
 export const getHierarchyTrackingIds = (hierarchy: ElementInfo[]): string[] => {
-  return hierarchy
-    .map(h => h.trackingId || 'null')
-    .filter(id => id !== 'null');
-};
+  return hierarchy.map(h => h.trackingId || 'null').filter(id => id !== 'null')
+}
 
 /**
  * Extract component names from hierarchy
@@ -124,8 +129,8 @@ export const getHierarchyTrackingIds = (hierarchy: ElementInfo[]): string[] => {
  * @returns Array of component names
  */
 export const getHierarchyComponentNames = (hierarchy: ElementInfo[]): string[] => {
-  return hierarchy.map(h => h.componentName);
-};
+  return hierarchy.map(h => h.componentName)
+}
 
 /**
  * Extract test IDs from hierarchy
@@ -133,8 +138,8 @@ export const getHierarchyComponentNames = (hierarchy: ElementInfo[]): string[] =
  * @returns Array of test IDs
  */
 export const getHierarchyTestIds = (hierarchy: ElementInfo[]): string[] => {
-  return hierarchy.map(h => h.testID || 'null');
-};
+  return hierarchy.map(h => h.testID || 'null')
+}
 
 /**
  * Build a flattened hierarchy representation for analytics
@@ -142,22 +147,22 @@ export const getHierarchyTestIds = (hierarchy: ElementInfo[]): string[] => {
  * @returns Flattened hierarchy data
  */
 export const buildHierarchyData = (hierarchy: ElementInfo[]) => {
-  const componentCounts: Record<string, number> = {};
+  const componentCounts: Record<string, number> = {}
 
   return hierarchy.map(component => {
     // Calculate same-tag index
-    componentCounts[component.componentName] = (componentCounts[component.componentName] || 0) + 1;
-    const sameTagIndex = componentCounts[component.componentName];
+    componentCounts[component.componentName] = (componentCounts[component.componentName] || 0) + 1
+    const sameTagIndex = componentCounts[component.componentName]
 
     return {
       componentName: component.componentName,
       testID: component.testID,
       trackingId: component.trackingId,
       accessibilityLabel: component.accessibilityLabel,
-      sameTagIndex,
-    };
-  });
-};
+      sameTagIndex
+    }
+  })
+}
 
 /**
  * Find the closest ancestor with a specific component name
@@ -171,19 +176,19 @@ export const findClosestAncestor = (
   hierarchy: ElementInfo[],
   componentName: string
 ): ElementInfo | null => {
-  const elementIndex = hierarchy.findIndex(h => h === element);
+  const elementIndex = hierarchy.findIndex(h => h === element)
 
   if (elementIndex >= 0) {
     // Search backwards from the element's position
     for (let i = elementIndex - 1; i >= 0; i--) {
       if (hierarchy[i].componentName === componentName) {
-        return hierarchy[i];
+        return hierarchy[i]
       }
     }
   }
 
-  return null;
-};
+  return null
+}
 
 /**
  * Get the depth of an element in the hierarchy
@@ -191,12 +196,9 @@ export const findClosestAncestor = (
  * @param hierarchy The component hierarchy stack
  * @returns The depth (0-based) or -1 if not found
  */
-export const getElementDepth = (
-  element: ElementInfo,
-  hierarchy: ElementInfo[]
-): number => {
-  return hierarchy.findIndex(h => h === element);
-};
+export const getElementDepth = (element: ElementInfo, hierarchy: ElementInfo[]): number => {
+  return hierarchy.findIndex(h => h === element)
+}
 
 /**
  * Check if an element is a descendant of another element
@@ -210,8 +212,8 @@ export const isDescendantOf = (
   ancestor: ElementInfo,
   hierarchy: ElementInfo[]
 ): boolean => {
-  const descendantIndex = hierarchy.findIndex(h => h === descendant);
-  const ancestorIndex = hierarchy.findIndex(h => h === ancestor);
+  const descendantIndex = hierarchy.findIndex(h => h === descendant)
+  const ancestorIndex = hierarchy.findIndex(h => h === ancestor)
 
-  return descendantIndex > ancestorIndex && descendantIndex >= 0 && ancestorIndex >= 0;
-};
+  return descendantIndex > ancestorIndex && descendantIndex >= 0 && ancestorIndex >= 0
+}

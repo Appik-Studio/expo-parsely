@@ -85,9 +85,7 @@ export class HeartbeatTouchBoundary extends Component<HeartbeatTouchBoundaryProp
       }, this.SCROLL_TIMEOUT_MS)
 
       isDev &&
-        console.log(
-          '🎯 [HeartbeatTouchBoundary] SCROLLING DETECTED - Recording as activity (Parse.ly compatible)'
-        )
+        console.log('🎯 [HeartbeatTouchBoundary] SCROLLING DETECTED - Recording as activity (Parse.ly compatible)')
     }
 
     // Record activity for scroll and non-scroll movements (Parse.ly tracks scroll as engagement)
@@ -113,9 +111,7 @@ export class HeartbeatTouchBoundary extends Component<HeartbeatTouchBoundaryProp
 
     isDev &&
       (this.touchState.isScrolling || isGloballyScrolling) &&
-      console.log(
-        '🎯 [HeartbeatTouchBoundary] Touch ended - scroll gesture complete, resetting ALL state'
-      )
+      console.log('🎯 [HeartbeatTouchBoundary] Touch ended - scroll gesture complete, resetting ALL state')
 
     this.touchState.isScrolling = false
     isGloballyScrolling = false

@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { Pressable, View } from 'react-native'
 
 import { isDev } from '../constants'
-import { useHeartbeatDebug } from '../hooks/useHeartbeatDebug'
 import { isCurrentlyScrolling } from './HeartbeatTouchBoundary'
 import Text from './Text'
+import { useHeartbeatDebug } from '../hooks/useHeartbeatDebug'
 
 const HeartbeatDebugOverlay = () => {
   const { resetStats, stats } = useHeartbeatDebug()
@@ -87,13 +87,11 @@ const HeartbeatDebugOverlay = () => {
 
             <Text style={{ fontSize: 12, color: 'white' }}>
               Scrolling:{' '}
-              <Text style={{ color: scrollState ? '#fb923c' : '#4ade80' }}>
-                {scrollState ? 'YES' : 'NO'}
-              </Text>
+              <Text style={{ color: scrollState ? '#fb923c' : '#4ade80' }}>{scrollState ? 'YES' : 'NO'}</Text>
             </Text>
           </View>
 
-          <Pressable 
+          <Pressable
             style={{
               marginTop: 12,
               borderRadius: 4,
