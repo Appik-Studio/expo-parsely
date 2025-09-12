@@ -1,0 +1,21 @@
+{
+  "name": "expo-parsely",
+  "platforms": [
+    "ios",
+    "android"
+  ],
+  "ios": {
+    "modules": [
+      "ExpoParselyModule"
+    ],
+    "sourceFiles": [
+      "ExpoParselyModule.swift",
+      "ExpoAnalyticsTracker.swift"
+    ]
+  },
+  "android": {
+    "modules": [
+      "expo.modules.parsely.ExpoParselyModule"
+    ]
+  }
+} 

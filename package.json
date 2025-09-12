@@ -1,0 +1,82 @@
+{
+  "name": "@appik-studio/expo-parsely",
+  "version": "0.0.1",
+  "description": "Enhanced Expo plugin for Parse.ly Analytics SDK - comprehensive engagement tracking, heartbeat monitoring, and cross-platform analytics for React Native and Expo apps",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "files": [
+    "build",
+    "android",
+    "ios",
+    "plugin/build",
+    "app.plugin.js",
+    "expo-module.config.json",
+    "API_REFERENCE.md"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "scripts": {
+    "build": "timeout 4 expo-module build",
+    "clean": "expo-module clean",
+    "lint": "expo-module lint",
+    "test": "expo-module test",
+    "prepare": "expo-module prepare",
+    "prepublishOnly": "expo-module prepublishOnly",
+    "bump-version": "bun run scripts/bump-version.ts",
+    "bump:patch": "bun run scripts/bump-version.ts patch",
+    "bump:minor": "bun run scripts/bump-version.ts minor",
+    "bump:major": "bun run scripts/bump-version.ts major",
+    "release:patch": "bun run bump:patch && git add . && git commit -m \"chore: release patch version\" && git push",
+    "release:minor": "bun run bump:minor && git add . && git commit -m \"chore: release minor version\" && git push",
+    "release:major": "bun run bump:major && git add . && git commit -m \"chore: release major version\" && git push",
+    "publish:npm": "npm publish",
+    "publish:dry": "npm publish --dry-run",
+    "expo-module": "expo-module",
+    "open:ios": "xed example/ios",
+    "open:android": "open -a \"Android Studio\" example/android",
+    "build:plugin": "tsc --build ./plugin/tsconfig.json",
+    "build:all": "bun run build && bun run build:plugin",
+    "ios:refresh": "bun run build:plugin && cd example && bun run expo:prebuild-clean-ios && bun run ios:pod-install && bun run ios",
+    "android:refresh": "bun run build:plugin && cd example && bun run expo:prebuild-clean-android && bun run android"
+  },
+  "keywords": [
+    "react-native",
+    "expo",
+    "expo-parsely",
+    "parsely",
+    "analytics",
+    "tracking",
+    "heartbeat",
+    "engagement",
+    "mobile-analytics"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appik-studio/expo-parsely.git"
+  },
+  "bugs": {
+    "url": "https://github.com/appik-studio/expo-parsely/issues"
+  },
+  "author": "Livio Gamassia <livio@appik-studio.ch> (Appik-Studio)",
+  "license": "MIT",
+  "homepage": "https://github.com/appik-studio/expo-parsely#readme",
+  "devDependencies": {
+    "@expo/config-plugins": "^8.0.0",
+    "@types/react": "~19.0.0",
+    "expo": "~52.0.0",
+    "expo-module-scripts": "^4.1.6",
+    "husky": "^9.1.7",
+    "react-native": "*",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  },
+  "expo": {
+    "plugin": "./app.plugin.js"
+  }
+}

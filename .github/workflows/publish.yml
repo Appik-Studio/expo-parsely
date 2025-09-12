@@ -1,0 +1,74 @@
+name: Publish to NPM
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@appik-studio'
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build the module
+        run: bun run build
+
+      - name: Build the plugin
+        run: bun run build:plugin
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Run linting
+        run: bun run lint
+
+      - name: Publish to GitHub Package Registry
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            Changes in this Release
+            - Enhanced Parse.ly SDK with mobile-specific features
+            - Cross-platform heartbeat tracking
+            - Element and component tracking
+            - TypeScript support
+          draft: false
+          prerelease: false
