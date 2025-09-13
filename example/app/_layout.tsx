@@ -1,9 +1,8 @@
-import { ParselyProvider } from 'expo-parsely'
+import ExpoParsely, { ParselyProvider } from 'expo-parsely'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import HeartbeatDebugOverlay from 'expo-parsely/components/HeartbeatDebugOverlay'
 import { HeartbeatTouchBoundary } from 'expo-parsely/components/HeartbeatTouchBoundary'
-import ExpoParsely from 'expo-parsely'
 
 const RootLayout = () => {
   return (
@@ -15,16 +14,16 @@ const RootLayout = () => {
       enableDebugLogging={__DEV__}
       heartbeatConfig={{
         enableHeartbeats: true,
-        inactivityThresholdMs: 5000, // 5 seconds for easier testing
-        intervalMs: 10000, // 10 seconds
+        inactivityThresholdMs: 5000,
+        intervalMs: 10000,
         maxDurationMs: 1800000
       }}
       activityDetectionConfig={{
         enableTouchDetection: true,
         enableScrollDetection: true,
-        touchThrottleMs: 500, // Reduced throttling for more responsive detection
+        touchThrottleMs: 500,
         scrollThrottleMs: 1000,
-        scrollThreshold: 5.0 // Lower threshold for scroll detection
+        scrollThreshold: 5.0
       }}
       navigationTracking={{
         enabled: true,
