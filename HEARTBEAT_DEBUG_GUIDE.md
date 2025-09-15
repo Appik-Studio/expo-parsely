@@ -66,7 +66,7 @@ bun run dev
 
 - **Touch** : Tap n'importe où dans l'app (automatiquement détecté par HeartbeatTouchBoundary - enregistre activité + reset timer heartbeat)
 - **Scroll** : Scroll dans les listes/écrans (détection automatique du scroll - enregistre activité + reset timer heartbeat)
-- **Navigation** : Naviguer entre écrans (reset seulement timer heartbeat via NavigationTracker)
+- **Screen Changes** : Wrapper manuellement les écrans avec TrackableScreen pour tracking explicite
 
 ### **5. Vérifier les Analytics**
 
@@ -85,29 +85,69 @@ Le système d'activité consolidé enregistre tous les types d'interactions util
 
 1. **Touch Events** (`HeartbeatTouchBoundary`)
    - Détecte automatiquement tous les touch events (tap, scroll)
-   - Enregistre activité Parse.ly + reset timer heartbeat
+   - Déclenche le worklet useReanimatedHeartbeat
    - Logs: `🎯 [HeartbeatTouchBoundary]`
 
-2. **Navigation Events** (`NavigationTracker`)
-   - Détecte les changements de navigation
-   - Reset seulement timer heartbeat (activité Parse.ly gérée par touch events)
-   - Logs: `Navigation detected - heartbeat timer reset`
+2. **Screen Tracking** (`ParselyTrackablePageView`)
+   - Tracking manuel des écrans (pas automatique)
+   - Déclenche le worklet useReanimatedHeartbeat
+   - Logs: Screen tracking logs
 
-3. **Heartbeat Events** (`useReanimatedHeartbeat`)
-   - Événements périodiques envoyés à intervalles réguliers
-   - Enregistre activité Parse.ly seulement (pas de reset récursif)
-   - Logs: `💓 [Parse.ly Heartbeat]`
+3. **Worklet Processing** (`useReanimatedHeartbeat`)
+   - Traite toutes les interactions utilisateur
+   - Enregistre activité Parse.ly + reset timer heartbeat
+   - Logs: `📊 [Parse.ly] Activity recorded from heartbeat worklet`
 
-### **Flux d'Activité Consolidé**
+### **Flux d'Activité Simplifié**
 
 ```
-Touch/Scroll Events → HeartbeatTouchBoundary → Parse.ly Recording + Heartbeat Timer Reset
-Navigation Events → NavigationTracker → Heartbeat Timer Reset Only
+Touch/Scroll Events → HeartbeatTouchBoundary → useReanimatedHeartbeat Worklet
+Screen Changes → ParselyTrackablePageView → useReanimatedHeartbeat Worklet
     ↓
-Heartbeat Interval → Heartbeat Event → Parse.ly Recording
+Worklet → ExpoParsely.recordActivity() → Parse.ly Recording + Heartbeat Timer Reset
 ```
 
 Toutes les interactions utilisateur reset le timer heartbeat, assurant un tracking précis de l'engagement !
+
+## 🏗️ Architecture Simplifiée
+
+**Native Modules (Swift/Kotlin)**
+
+- ✅ Modules natifs simplifiés - seulement les fonctions essentielles
+- ✅ Plus de logique complexe heartbeat/scroll dans les modules natifs
+- ✅ Logique gérée par le worklet React Native et les composants
+
+**Worklet Processing**
+
+- ✅ Toute la logique active/inactive et scroll gérée par `useReanimatedHeartbeat`
+- ✅ `ExpoParsely.recordActivity()` appelé seulement depuis le worklet
+- ✅ Performance optimale avec traitement UI thread
+
+## 📱 Utilisation de ParselyTrackablePageView
+
+Pour tracker manuellement les changements d'écran (nécessite ParselyProvider) :
+
+```tsx
+import { ParselyTrackablePageView } from 'expo-parsely'
+
+// Wrapper votre écran principal
+<ParselyTrackablePageView
+  screenName="Home Screen"
+  screenUrl="/home"
+  analyticsContext={{ userType: 'premium' }}
+>
+  <YourHomeScreenContent />
+</ParselyTrackablePageView>
+
+// Ou dans un autre écran
+<ParselyTrackablePageView
+  screenName="Product Details"
+  screenUrl="/products/123"
+  analyticsContext={{ productId: '123', category: 'electronics' }}
+>
+  <ProductDetailsContent />
+</ParselyTrackablePageView>
+```
 
 ## 🎛️ Configuration Debug
 
@@ -142,13 +182,14 @@ const interval = setInterval(() => {
 ### **Pas d'activité détectée**
 
 1. Vérifier que `HeartbeatTouchBoundary` est bien wrapper autour du contenu principal (pour touch/scroll)
-2. S'assurer que `NavigationTracker` est utilisé pour les changements de navigation
+2. Wrapper les écrans importants avec `ParselyTrackablePageView` pour tracking manuel
 3. Vérifier que `useReanimatedHeartbeat` est correctement configuré dans ParselyProvider
 4. Tester avec l'overlay debug pour voir les stats en temps réel
 5. Vérifier les logs d'activité dans la console (**DEV** mode):
    - `🎯 [HeartbeatTouchBoundary]` pour les événements touch
-   - `Navigation detected - heartbeat timer reset` pour les événements navigation
-   - `💓 [Parse.ly Heartbeat]` pour les événements heartbeat
+   - Screen tracking logs pour les changements d'écran via ParselyTrackablePageView
+   - `📊 [Parse.ly] Activity recorded from heartbeat worklet` pour le traitement worklet
+   - `📊 [ExpoParsely] Activity recorded` pour l'enregistrement natif
 
 ### **Heartbeat s'arrête trop tôt**
 

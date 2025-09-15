@@ -1,26 +1,33 @@
-import ExpoParsely from './ExpoParselyModule'
+// Re-export types
+export type {
+  ActivityDetectionConfig,
+  CommonParameters,
+  EngagementOptions,
+  HeartbeatConfig,
+  HeartbeatDebugInfo,
+  HeartbeatDebugOverlayProps,
+  HeartbeatTouchBoundaryProps,
+  PageViewOptions,
+  ParselyMetadata,
+  ParselyProviderProps,
+  ParselyTrackablePageViewProps,
+  TrackableScreenProps,
+  TrackingContextValue,
+  VideoOptions
+} from './ExpoParsely.types'
 
-// Export enhanced components
-export { default as HeartbeatDebugOverlay } from './components/HeartbeatDebugOverlay'
-export { HeartbeatTouchBoundary } from './components/HeartbeatTouchBoundary'
-export { NavigationTracker } from './components/NavigationTracker'
-export { default as ParselyProvider } from './components/ParselyProvider'
+// Re-export the native module
+export { default } from './ExpoParselyModule'
 
-// Export enhanced hooks
-export { useHeartbeatDebug } from './hooks/useHeartbeatDebug'
+// Re-export hooks
 export { useReanimatedHeartbeat } from './hooks/useReanimatedHeartbeat'
 
-// Export contexts
-export { TrackingContext, TrackingProvider, useTrackingContext } from './contexts/TrackingContext'
-
-// Export utilities
-// Note: hierarchyHelpers removed for simplicity
-
-// Export constants
-export * from './constants'
-
-// Export types
-export * from './ExpoParsely.types'
-
-// Export main module
-export default ExpoParsely
+// Re-export components
+export {
+  default as HeartbeatDebugOverlay,
+  HeartbeatDebugProvider,
+  useHeartbeatDebug
+} from './components/HeartbeatDebugOverlay'
+export { HeartbeatTouchBoundary, isCurrentlyScrolling } from './components/HeartbeatTouchBoundary'
+export { ParselyProvider, useTrackingContext } from './components/ParselyProvider'
+export { ParselyTrackablePageView } from './components/ParselyTrackablePageView'

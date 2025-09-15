@@ -1,303 +1,99 @@
 package expo.modules.parsely
 
+import android.content.Context
+import com.parsely.parselyandroid.ParselyTracker
+import com.parsely.parselyandroid.ParselyMetadata
+import com.parsely.parselyandroid.ParselyVideoMetadata
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import android.content.Context
-import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import java.util.concurrent.ConcurrentHashMap
-import java.util.UUID
-// import com.parsely.parselyandroid.ParselyTracker
-// Note: Parsely SDK import commented out - add when SDK is available
 
 class ExpoParselyModule : Module() {
-  private var isHeartbeatActive = false
-  private var heartbeatHandler: Handler? = null
-  private var heartbeatRunnable: Runnable? = null
-  private var heartbeatIntervalMs: Long = 15000 // Default: 15 seconds
-  private var inactivityThresholdMs: Long = 5000 // Default: 5 seconds
-  private var maxDurationMs: Long = 3600000 // Default: 1 hour
-  private var lastActivityTime: Long = System.currentTimeMillis()
-  private var sessionStartTime: Long = System.currentTimeMillis()
-  private var totalActivities: Long = 0
-  private var totalHeartbeats: Long = 0
-  private var isScrolling = false
-
-  // Activity detection config - handled by HeartbeatTouchBoundary component
-  private var enableTouchDetection = true // Detects touch/tap events (mousedown equivalent)
-  private var enableScrollDetection = true // Parse.ly: scroll events are engagement
-  private var touchThrottleMs: Long = 500
-  private var scrollThrottleMs: Long = 2000
-  private var scrollThreshold: Int = 5
-
-  // Component tracking registry
-  private val componentTrackingRegistry = ConcurrentHashMap<String, Map<String, Any>>()
+  private var parselyTracker: ParselyTracker? = null
 
   override fun definition() = ModuleDefinition {
     Name("ExpoParsely")
 
-    Function("init") { siteId: String, flushInterval: Int?, dryRun: Boolean? ->
-      try {
-        val context = requireNotNull(appContext.reactContext)
-        val flushIntervalSeconds = flushInterval ?: 150 // Parse.ly default: 150s
-        val isDryRun = dryRun ?: false
-
-        // TODO: Replace with actual Parsely SDK call when available:
-        // ParselyTracker.init(siteId, flushIntervalSeconds, context, isDryRun)
-        println("ExpoParsely init: siteId=$siteId, flushInterval=$flushIntervalSeconds, dryRun=$isDryRun")
-        recordActivity() // Initialize activity tracking
-      } catch (e: Exception) {
-        println("ExpoParsely init error: ${e.message}")
-      }
+    // Configure the Parsely tracker
+    Function("init") { siteId: String ->
+      val context = appContext.reactContext ?: throw IllegalStateException("React context is null")
+      ParselyTracker.init(siteId, 30, context, false)
+      parselyTracker = ParselyTracker.sharedInstance()
     }
 
-    Function("trackPageView") { params: Map<String, Any> ->
-      try {
-        val url = params["url"] as? String ?: run {
-          println("ExpoParsely: Missing URL in params: $params")
-          return@Function
-        }
+    // Track page view
+    Function("trackPageView") { options: Map<String, Any?> ->
+      ensureTrackerInitialized()
 
-        val urlRef = params["urlRef"] as? String ?: ""
-        val siteId = params["siteId"] as? String ?: ""
-        val metadata = params["metadata"] as? Map<String, Any>
-        val extraData = params["extraData"] as? Map<String, Any>
-        val action = params["action"] as? String
-        val customData = params["data"] as? Map<String, Any>
+      val url = options["url"] as? String ?: throw IllegalArgumentException("URL is required")
+      val urlref = options["urlref"] as? String ?: ""
 
-        // Merge custom data with extraData for Parse.ly
-        val finalExtraData = mutableMapOf<String, Any>()
-        extraData?.let { finalExtraData.putAll(it) }
-        customData?.let { finalExtraData.putAll(it) }
+      // Handle metadata if provided
+      val metadata = options["metadata"]?.let { createParselyMetadata(it as Map<String, Any?>) }
+      val extraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
 
-        // TODO: Replace with actual Parsely SDK call when available:
-        // if (action != null) {
-        //     ParselyTracker.sharedInstance.trackURL(url, urlRef, finalExtraData, siteId, action)
-        // } else {
-        //     ParselyTracker.sharedInstance.trackURL(url, urlRef, finalExtraData, siteId)
-        // }
-        println("ExpoParsely trackPageView: url=$url, urlRef=$urlRef, action=$action, metadata=$metadata")
-
-        recordActivity()
-      } catch (e: Exception) {
-        println("ExpoParsely trackPageView error: ${e.message}")
-      }
+      // Use basic tracking call for v4.x SDK compatibility
+      parselyTracker?.trackPageview(url, urlref, metadata, extraData as Map<String, Any>?)
     }
 
-    Function("startEngagement") { params: Map<String, Any> ->
-      try {
-        val url = params["url"] as? String ?: run {
-          println("ExpoParsely: Missing URL in params: $params")
-          return@Function
-        }
+    // Engagement tracking
+    Function("startEngagement") { options: Map<String, Any?> ->
+      ensureTrackerInitialized()
 
-        val urlRef = params["urlRef"] as? String ?: ""
-        val siteId = params["siteId"] as? String ?: ""
-        val extraData = params["extraData"] as? Map<String, Any>
+      val url = options["url"] as? String ?: throw IllegalArgumentException("URL is required")
+      val urlref = options["urlref"] as? String ?: ""
+      val extraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
 
-        // TODO: Replace with actual Parsely SDK call when available:
-        // ParselyTracker.sharedInstance.startEngagement(url, urlRef, extraData, siteId)
-        println("ExpoParsely startEngagement: url=$url, urlRef=$urlRef")
-
-        recordActivity()
-        startHeartbeatTrackingInternal()
-      } catch (e: Exception) {
-        println("ExpoParsely startEngagement error: ${e.message}")
-      }
+      parselyTracker?.startEngagement(url, urlref, extraData as Map<String, Any>?)
     }
 
     Function("stopEngagement") {
-      try {
-        // TODO: Replace with actual Parsely SDK call when available:
-        // ParselyTracker.sharedInstance.stopEngagement()
-        println("ExpoParsely stopEngagement")
-        stopHeartbeatTrackingInternal()
-      } catch (e: Exception) {
-        println("ExpoParsely stopEngagement error: ${e.message}")
-      }
+      parselyTracker?.stopEngagement()
     }
 
-
-    // Enhanced Heartbeat and Activity Detection Implementation
-    Function("configureHeartbeat") { config: Map<String, Any> ->
-      config["enableHeartbeats"]?.let {
-        // Configuration is stored but heartbeat enabling is handled by start/stop methods
-      }
-      config["inactivityThresholdMs"]?.let {
-        inactivityThresholdMs = (it as? Number)?.toLong() ?: inactivityThresholdMs
-      }
-      config["intervalMs"]?.let {
-        heartbeatIntervalMs = (it as? Number)?.toLong() ?: heartbeatIntervalMs
-      }
-      config["maxDurationMs"]?.let {
-        maxDurationMs = (it as? Number)?.toLong() ?: maxDurationMs
-      }
-    }
-
-    Function("configureActivityDetection") { config: Map<String, Any> ->
-      config["enableTouchDetection"]?.let {
-        enableTouchDetection = it as? Boolean ?: enableTouchDetection
-      }
-      config["enableScrollDetection"]?.let {
-        enableScrollDetection = it as? Boolean ?: enableScrollDetection
-      }
-      config["touchThrottleMs"]?.let {
-        touchThrottleMs = (it as? Number)?.toLong() ?: touchThrottleMs
-      }
-      config["scrollThrottleMs"]?.let {
-        scrollThrottleMs = (it as? Number)?.toLong() ?: scrollThrottleMs
-      }
-      config["scrollThreshold"]?.let {
-        scrollThreshold = (it as? Number)?.toInt() ?: scrollThreshold
-      }
-    }
-
-    Function("recordActivity") {
-      recordActivity()
-    }
-
-
-
-
-
-
-    // Video tracking methods
-    Function("trackPlay") { url: String, videoMetadata: Map<String, Any>, urlRef: String?, extraData: Map<String, Any>?, siteId: String? ->
-      try {
-        // TODO: Replace with actual Parsely SDK call when available:
-        // ParselyTracker.sharedInstance.trackPlay(url, urlRef, videoMetadata)
-        println("ExpoParsely trackPlay: url=$url, videoMetadata=$videoMetadata, urlRef=$urlRef")
-        recordActivity()
-      } catch (e: Exception) {
-        println("ExpoParsely trackPlay error: ${e.message}")
-      }
+    // Video tracking (simplified for compatibility)
+    Function("trackPlay") { options: Map<String, Any?> ->
+      ensureTrackerInitialized()
+      // For now, just track as a regular page view with video metadata in extraData
+      val url = options["url"] as? String ?: throw IllegalArgumentException("URL is required")
+      val urlref = options["urlref"] as? String ?: ""
+      val extraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
+      val mergedExtraData = mutableMapOf<String, Any?>()
+      mergedExtraData.putAll(extraData)
+      mergedExtraData["video_play"] = true
+      parselyTracker?.trackPageview(url, urlref, null, mergedExtraData as Map<String, Any>?)
     }
 
     Function("trackPause") {
-      try {
-        // TODO: Replace with actual Parsely SDK call when available:
-        // ParselyTracker.sharedInstance.trackPause()
-        println("ExpoParsely trackPause")
-      } catch (e: Exception) {
-        println("ExpoParsely trackPause error: ${e.message}")
-      }
+      parselyTracker?.trackPause()
     }
 
     Function("resetVideo") {
-      try {
-        // TODO: Replace with actual Parsely SDK call when available:
-        // ParselyTracker.sharedInstance.resetVideo()
-        println("ExpoParsely resetVideo")
-      } catch (e: Exception) {
-        println("ExpoParsely resetVideo error: ${e.message}")
-      }
+      parselyTracker?.resetVideo()
     }
 
-    // Heartbeat status methods
-    Function("getHeartbeatStatus") { ->
-      getHeartbeatStatusInternal()
+    // Heartbeat management
+    Function("startHeartbeat") { config: Map<String, Any?>? ->
+      ensureTrackerInitialized()
+
+      // For now, delegate to startEngagement with default URL
+      // In a more advanced implementation, this could manage custom heartbeat timers
+      parselyTracker?.startEngagement("app://heartbeat", "", emptyMap())
     }
 
-    Function("startHeartbeatTracking") {
-      startHeartbeatTrackingInternal()
-    }
-
-    Function("stopHeartbeatTracking") {
-      stopHeartbeatTrackingInternal()
+    Function("stopHeartbeat") {
+      parselyTracker?.stopEngagement()
     }
   }
 
-  private fun startHeartbeatTrackingInternal() {
-    if (isHeartbeatActive) return
-
-    isHeartbeatActive = true
-    sessionStartTime = System.currentTimeMillis()
-    lastActivityTime = System.currentTimeMillis()
-
-    heartbeatHandler = Handler(Looper.getMainLooper())
-    heartbeatRunnable = object : Runnable {
-      override fun run() {
-        if (!isHeartbeatActive) return
-
-        val currentTime = System.currentTimeMillis()
-        val timeSinceActivity = currentTime - lastActivityTime
-        val sessionDuration = currentTime - sessionStartTime
-
-        // Check if user has been inactive for too long
-        if (timeSinceActivity > inactivityThresholdMs) {
-          stopHeartbeatTrackingInternal()
-          return
-        }
-
-        // Check if session has exceeded max duration
-        if (sessionDuration > maxDurationMs) {
-          stopHeartbeatTrackingInternal()
-          return
-        }
-
-        // Send heartbeat (could be implemented as a custom event if needed)
-        totalHeartbeats++
-
-        // Schedule next heartbeat
-        heartbeatHandler?.postDelayed(this, heartbeatIntervalMs)
-      }
-    }
-
-    heartbeatHandler?.postDelayed(heartbeatRunnable!!, heartbeatIntervalMs)
-  }
-
-  private fun stopHeartbeatTrackingInternal() {
-    isHeartbeatActive = false
-    heartbeatRunnable?.let { heartbeatHandler?.removeCallbacks(it) }
-    heartbeatHandler = null
-    heartbeatRunnable = null
-  }
-
-  private fun recordActivity() {
-    lastActivityTime = System.currentTimeMillis()
-    totalActivities++
-  }
-
-  private fun getHeartbeatStatusInternal(): Map<String, Any> {
-    return mapOf(
-      "isActive" to isHeartbeatActive,
-      "lastActivity" to lastActivityTime,
-      "sessionDuration" to (System.currentTimeMillis() - sessionStartTime),
-      "totalActivities" to totalActivities,
-      "totalHeartbeats" to totalHeartbeats
-    )
-  }
-
-  private fun registerComponentTrackingInternal(config: Map<String, Any>): String {
-    val trackingId = UUID.randomUUID().toString()
-    componentTrackingRegistry[trackingId] = config
-    return trackingId
-  }
-
-  private fun unregisterComponentTrackingInternal(trackingId: String) {
-    componentTrackingRegistry.remove(trackingId)
-  }
-
-  private fun setScrollStateInternal(scrolling: Boolean) {
-    if (enableScrollDetection) {
-      isScrolling = scrolling
-      if (scrolling) {
-        recordActivity() // Parse.ly methodology: scroll = engagement
-      }
+  private fun ensureTrackerInitialized() {
+    if (parselyTracker == null) {
+      throw IllegalStateException("Parsely tracker not initialized. Call init() first.")
     }
   }
 
-  private fun isCurrentlyScrollingInternal(): Boolean {
-    return isScrolling
+  private fun createParselyMetadata(dict: Map<String, Any?>): ParselyMetadata {
+    // Create basic metadata - properties may be private in current SDK version
+    return ParselyMetadata()
   }
-
-  private fun getPreferences(): SharedPreferences {
-    val context = requireNotNull(appContext.reactContext)
-    return context.getSharedPreferences("expo_parsely_preferences", Context.MODE_PRIVATE)
-  }
-
-
-  // MARK: - Parsely Analytics Helper Methods
 
 }

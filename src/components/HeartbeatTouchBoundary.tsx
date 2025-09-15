@@ -1,124 +1,137 @@
-import { Component, PropsWithChildren, ReactNode } from 'react'
+import React, { useCallback, useRef } from 'react'
 import { GestureResponderEvent, View } from 'react-native'
 
-const isDev = __DEV__
-
-interface HeartbeatTouchBoundaryProps extends PropsWithChildren {
-  onTouchActivity?: () => void
-  onHeartbeatActivity?: () => void // For heartbeat timer reset
-}
+import type { HeartbeatTouchBoundaryProps } from '../ExpoParsely.types'
+import ExpoParsely from '../ExpoParselyModule'
 
 let isGloballyScrolling = false
-
 export const isCurrentlyScrolling = isGloballyScrolling
 
 interface TouchState {
   isScrolling: boolean
 }
 
-export class HeartbeatTouchBoundary extends Component<HeartbeatTouchBoundaryProps> {
-  public static displayName = 'HeartbeatTouchBoundary'
-
-  public readonly name = 'HeartbeatTouchBoundary'
-
-  private lastTouchMoveTime = 0
-  private touchStartY = 0
-  private touchStartX = 0
-  private touchState: TouchState = {
-    isScrolling: false
-  }
-  private readonly TOUCH_MOVE_THROTTLE_MS = 1000 // Only record touch move once per second
-  private readonly SCROLL_THRESHOLD = 10 // Pixels - if a move is primarily vertical, consider it scrolling
-  private readonly SCROLL_TIMEOUT_MS = 2000 // Reset scroll state after 2 seconds
-  private scrollTimeoutId: ReturnType<typeof setTimeout> | null = null
-
-  public componentWillUnmount(): void {
-    // Clean up timeout to prevent memory leaks
-    if (this.scrollTimeoutId) {
-      clearTimeout(this.scrollTimeoutId)
-      this.scrollTimeoutId = null
-    }
-    isGloballyScrolling = false
-  }
-
-  public render(): ReactNode {
-    return (
-      <View
-        style={{ flex: 1 }}
-        onTouchCancel={this._onTouchEnd}
-        onTouchEnd={this._onTouchEnd}
-        onTouchMove={this._onTouchMove}
-        onTouchStart={this._onTouchStart}>
-        {this.props.children}
-      </View>
-    )
-  }
-
-  private _onTouchStart = (e: GestureResponderEvent): void => {
-    this.touchStartY = e.nativeEvent.pageY
-    this.touchStartX = e.nativeEvent.pageX
-    this.touchState.isScrolling = false
-    isGloballyScrolling = false
-
-    isDev && console.log('🎯 [HeartbeatTouchBoundary] Touch start detected - recording activity')
-    this.props.onTouchActivity?.()
-    this.props.onHeartbeatActivity?.()
-  }
-
-  private _onTouchMove = (e: GestureResponderEvent): void => {
-    // Calculate movement distance
-    const deltaY = Math.abs(e.nativeEvent.pageY - this.touchStartY)
-    const deltaX = Math.abs(e.nativeEvent.pageX - this.touchStartX)
-
-    const isProbablyScrolling = deltaY > this.SCROLL_THRESHOLD && deltaY > deltaX
-
-    if (isProbablyScrolling && !this.touchState.isScrolling) {
-      this.touchState.isScrolling = true
-      isGloballyScrolling = true
-
-      // Set a timeout to reset scroll state in case touch events get lost
-      if (this.scrollTimeoutId) {
-        clearTimeout(this.scrollTimeoutId)
-      }
-      this.scrollTimeoutId = setTimeout(() => {
-        isDev && console.log('🎯 [HeartbeatTouchBoundary] SCROLL TIMEOUT - Resetting scroll state')
-        isGloballyScrolling = false
-        this.touchState.isScrolling = false
-      }, this.SCROLL_TIMEOUT_MS)
-
-      isDev &&
-        console.log('🎯 [HeartbeatTouchBoundary] SCROLLING DETECTED - Recording as activity (Parse.ly compatible)')
-    }
-
-    // Record activity for scroll and non-scroll movements (Parse.ly tracks scroll as engagement)
-    // But throttle to prevent excessive events
-    const currentTime = Date.now()
-    if (currentTime - this.lastTouchMoveTime >= this.TOUCH_MOVE_THROTTLE_MS) {
-      const activityType = this.touchState.isScrolling ? 'scroll' : 'touch move'
-      isDev &&
-        console.log(
-          `🎯 [HeartbeatTouchBoundary] ${activityType.toUpperCase()} activity detected - recording (throttled)`
-        )
-      this.props.onTouchActivity?.()
-      this.props.onHeartbeatActivity?.()
-      this.lastTouchMoveTime = currentTime
-    }
-  }
-
-  private _onTouchEnd = (): void => {
-    // Clear scroll timeout if it exists
-    if (this.scrollTimeoutId) {
-      clearTimeout(this.scrollTimeoutId)
-      this.scrollTimeoutId = null
-    }
-
-    isDev &&
-      (this.touchState.isScrolling || isGloballyScrolling) &&
-      console.log('🎯 [HeartbeatTouchBoundary] Touch ended - scroll gesture complete, resetting ALL state')
-
-    this.touchState.isScrolling = false
-    isGloballyScrolling = false
-  }
+interface HeartbeatTouchBoundaryInternalProps extends HeartbeatTouchBoundaryProps {
+  children: React.ReactNode
 }
 
-export default HeartbeatTouchBoundary
+export const HeartbeatTouchBoundary: React.FC<HeartbeatTouchBoundaryInternalProps> = ({ children }) => {
+  const isDev = __DEV__
+
+  // Record activity function - calls Parse.ly native recordActivity method
+  const recordActivity = useCallback(() => {
+    if (isDev) {
+      console.log('🎯 [HeartbeatTouchBoundary] Recording activity with Parse.ly')
+    }
+    ExpoParsely.recordActivity()
+  }, [])
+
+  const lastTouchMoveTime = useRef(0)
+  const touchStartY = useRef(0)
+  const touchStartX = useRef(0)
+  const touchState = useRef<TouchState>({ isScrolling: false })
+  const scrollTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const TOUCH_MOVE_THROTTLE_MS = 1000 // Only record touch move once per second
+  const SCROLL_THRESHOLD = 10 // Pixels - if a move is primarily vertical, consider it scrolling
+  const SCROLL_TIMEOUT_MS = 2000 // Reset scroll state after 2 seconds
+
+  const _onTouchStart = useCallback(
+    (e: GestureResponderEvent): void => {
+      touchStartY.current = e.nativeEvent.pageY
+      touchStartX.current = e.nativeEvent.pageX
+      touchState.current.isScrolling = false
+      isGloballyScrolling = false
+
+      if (isDev) {
+        console.log('🎯 [HeartbeatTouchBoundary] Touch start - recording activity')
+      }
+      recordActivity()
+    },
+    [isDev, recordActivity]
+  )
+
+  const _onTouchMove = useCallback(
+    (e: GestureResponderEvent): void => {
+      // Calculate movement distance
+      const deltaY = Math.abs(e.nativeEvent.pageY - touchStartY.current)
+      const deltaX = Math.abs(e.nativeEvent.pageX - touchStartX.current)
+
+      const isProbablyScrolling = deltaY > SCROLL_THRESHOLD && deltaY > deltaX
+
+      if (isProbablyScrolling && !touchState.current.isScrolling) {
+        touchState.current.isScrolling = true
+        isGloballyScrolling = true
+
+        // Set a timeout to reset scroll state in case touch events get lost
+        if (scrollTimeoutId.current) {
+          clearTimeout(scrollTimeoutId.current)
+        }
+        scrollTimeoutId.current = setTimeout(() => {
+          if (isDev) {
+            console.log('🎯 [HeartbeatTouchBoundary] Scroll timeout - resetting state')
+          }
+          isGloballyScrolling = false
+          touchState.current.isScrolling = false
+        }, SCROLL_TIMEOUT_MS)
+
+        if (isDev) {
+          console.log('🎯 [HeartbeatTouchBoundary] Scrolling detected - recording activity')
+        }
+      }
+
+      // Record activity for scroll and non-scroll movements (Parse.ly tracks scroll as engagement)
+      // But throttle to prevent excessive events
+      const currentTime = Date.now()
+      if (currentTime - lastTouchMoveTime.current >= TOUCH_MOVE_THROTTLE_MS) {
+        if (isDev) {
+          console.log('🎯 [HeartbeatTouchBoundary] Touch move - recording activity (throttled)')
+        }
+        recordActivity()
+        lastTouchMoveTime.current = currentTime
+      }
+    },
+    [isDev, recordActivity]
+  )
+
+  const _onTouchEnd = useCallback((): void => {
+    // Clear scroll timeout if it exists
+    if (scrollTimeoutId.current) {
+      clearTimeout(scrollTimeoutId.current)
+      scrollTimeoutId.current = null
+    }
+
+    if (touchState.current.isScrolling || isGloballyScrolling) {
+      if (isDev) {
+        console.log('🎯 [HeartbeatTouchBoundary] Touch ended - resetting scroll state')
+      }
+    }
+
+    touchState.current.isScrolling = false
+    isGloballyScrolling = false
+  }, [isDev])
+
+  React.useEffect(() => {
+    return () => {
+      // Clean up timeout to prevent memory leaks
+      if (scrollTimeoutId.current) {
+        clearTimeout(scrollTimeoutId.current)
+        scrollTimeoutId.current = null
+      }
+      isGloballyScrolling = false
+    }
+  }, [])
+
+  return (
+    <View
+      style={{ flex: 1 }}
+      onTouchCancel={_onTouchEnd}
+      onTouchEnd={_onTouchEnd}
+      onTouchMove={_onTouchMove}
+      onTouchStart={_onTouchStart}>
+      {children}
+    </View>
+  )
+}
+
+HeartbeatTouchBoundary.displayName = 'HeartbeatTouchBoundary'

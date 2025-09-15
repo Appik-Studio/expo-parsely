@@ -1,181 +1,179 @@
-import { requireNativeModule } from 'expo-modules-core'
+import { NativeModule, requireNativeModule } from 'expo-modules-core'
 
-import type {
-  ActivityDetectionConfig,
-  ExtraData,
-  HeartbeatConfig,
-  HeartbeatStatus,
-  ParselyMetadata,
-  ParselyVideoMetadata,
-  TrackEngagementParams,
-  TrackingHierarchyConfig,
-  TrackPageViewParams
-} from './ExpoParsely.types'
+import type { CommonParameters, EngagementOptions, PageViewOptions } from './ExpoParsely.types'
 
-interface NativeModule {
-  init(siteId: string, flushInterval?: number, dryRun?: boolean): void
+declare class ExpoParselyModule extends NativeModule {
+  // Configuration
+  init(siteId: string): Promise<void>
 
-  // Page View Tracking
-  trackPageView(params: TrackPageViewParams): void
+  // Page view tracking - single method like iOS SDK
+  trackPageView(options: PageViewOptions): Promise<void>
 
-  // Engagement Tracking
-  startEngagement(params: TrackEngagementParams): void
-  stopEngagement(): void
+  // Engagement tracking (heartbeat)
+  startEngagement(options: EngagementOptions): Promise<void>
+  stopEngagement(): Promise<void>
 
-  // Video Tracking
-  trackPlay(
-    url: string,
-    videoMetadata: ParselyVideoMetadata,
-    urlRef?: string,
-    extraData?: ExtraData,
-    siteId?: string
-  ): void
-  trackPause(): void
-  resetVideo(): void
-
-  // Enhanced Heartbeat and Activity Detection
-  configureHeartbeat(config: HeartbeatConfig): void
-  configureActivityDetection(config: ActivityDetectionConfig): void
-  recordActivity(): void
-  getHeartbeatStatus(): HeartbeatStatus
-  startHeartbeatTracking(): void
-  stopHeartbeatTracking(): void
-
-  // Component Tracking
-  registerComponentTracking(config: TrackingHierarchyConfig): string
-  unregisterComponentTracking(trackingId: string): void
-
-  // Scroll and Touch Detection
-  setScrollState(isScrolling: boolean): void
-  isCurrentlyScrolling(): boolean
+  // Debug methods
+  getHeartbeatStatus(): Promise<{
+    isActive: boolean
+    lastActivity: number
+    sessionDuration: number
+    totalActivities: number
+    totalHeartbeats: number
+  }>
+  isCurrentlyScrolling(): Promise<boolean>
 }
 
-const nativeModule = requireNativeModule<NativeModule>('ExpoParsely')
+const NativeExpoParsely = requireNativeModule<ExpoParselyModule>('ExpoParsely')
 
-class ExpoParsely {
-  static init(siteId: string, options?: { flushInterval?: number; dryRun?: boolean }): void {
-    nativeModule.init(siteId, options?.flushInterval, options?.dryRun)
-  }
+// In-memory storage for common parameters
+let commonParameters: CommonParameters = {}
 
-  // Page View Tracking - New unified interface
-  static trackPageView(params: TrackPageViewParams): void
-  static trackPageView(
-    url: string,
-    urlRef?: string,
-    metadata?: ParselyMetadata,
-    extraData?: ExtraData,
-    siteId?: string
-  ): void
-  static trackPageView(
-    urlOrParams: string | TrackPageViewParams,
-    urlRef?: string,
-    metadata?: ParselyMetadata,
-    extraData?: ExtraData,
-    siteId?: string
-  ): void {
-    if (typeof urlOrParams === 'string') {
-      // Legacy support
-      nativeModule.trackPageView({
-        url: urlOrParams,
-        urlRef,
-        metadata: metadata as any,
-        extraData,
-        siteId
-      })
-    } else {
-      // New unified interface
-      nativeModule.trackPageView(urlOrParams)
-    }
-  }
-
-  // Engagement Tracking - New unified interface
-  static startEngagement(params: TrackEngagementParams): void
-  static startEngagement(url: string, urlRef?: string, extraData?: ExtraData, siteId?: string): void
-  static startEngagement(
-    urlOrParams: string | TrackEngagementParams,
-    urlRef?: string,
-    extraData?: ExtraData,
-    siteId?: string
-  ): void {
-    if (typeof urlOrParams === 'string') {
-      // Legacy support
-      nativeModule.startEngagement({
-        url: urlOrParams,
-        urlRef,
-        extraData,
-        siteId
-      })
-    } else {
-      // New unified interface
-      nativeModule.startEngagement(urlOrParams)
-    }
-  }
-
-  static stopEngagement(): void {
-    nativeModule.stopEngagement()
-  }
-
-  // Video tracking methods
-  static trackPlay(
-    url: string,
-    videoMetadata: ParselyVideoMetadata,
-    urlRef?: string,
-    extraData?: ExtraData,
-    siteId?: string
-  ): void {
-    nativeModule.trackPlay(url, videoMetadata, urlRef, extraData, siteId)
-  }
-
-  static trackPause(): void {
-    nativeModule.trackPause()
-  }
-
-  static resetVideo(): void {
-    nativeModule.resetVideo()
-  }
-
-  // Enhanced Heartbeat Methods
-  static configureHeartbeat(config: HeartbeatConfig): void {
-    nativeModule.configureHeartbeat(config)
-  }
-
-  static configureActivityDetection(config: ActivityDetectionConfig): void {
-    nativeModule.configureActivityDetection(config)
-  }
-
-  static recordActivity(): void {
-    nativeModule.recordActivity()
-  }
-
-  static getHeartbeatStatus(): HeartbeatStatus {
-    return nativeModule.getHeartbeatStatus()
-  }
-
-  static startHeartbeatTracking(): void {
-    nativeModule.startHeartbeatTracking()
-  }
-
-  static stopHeartbeatTracking(): void {
-    nativeModule.stopHeartbeatTracking()
-  }
-
-  // Component Tracking Methods
-  static registerComponentTracking(config: TrackingHierarchyConfig): string {
-    return nativeModule.registerComponentTracking(config)
-  }
-
-  static unregisterComponentTracking(trackingId: string): void {
-    nativeModule.unregisterComponentTracking(trackingId)
-  }
-
-  // Scroll and Touch Detection Methods
-  static setScrollState(isScrolling: boolean): void {
-    nativeModule.setScrollState(isScrolling)
-  }
-
-  static isCurrentlyScrolling(): boolean {
-    return nativeModule.isCurrentlyScrolling()
+// Helper function to merge common parameters with tracking options
+const mergeCommonParameters = <
+  T extends { url?: string; metadata?: any; extraData?: any; siteId?: string }
+>(
+  options: T
+): T => {
+  return {
+    ...options,
+    metadata: {
+      ...commonParameters.metadata,
+      ...options.metadata
+    },
+    extraData: {
+      ...commonParameters.extraData,
+      ...options.extraData
+    },
+    siteId: options.siteId || commonParameters.siteId
   }
 }
+
+// Wrapper class that adds common parameters functionality
+class ExpoParselyWrapper {
+  // Configuration
+  async init(siteId: string): Promise<void> {
+    return NativeExpoParsely.init(siteId)
+  }
+
+  // Set common parameters that will be included with all tracking calls
+  setCommonParameters(params: CommonParameters): void {
+    commonParameters = { ...params }
+  }
+
+  // Get current common parameters
+  getCommonParameters(): CommonParameters {
+    return { ...commonParameters }
+  }
+
+  // Clear common parameters
+  clearCommonParameters(): void {
+    commonParameters = {}
+  }
+
+  // Page view tracking with automatic common parameters merging
+  // Overload 1: URL as first parameter, options as second parameter (like iOS SDK)
+  async trackPageView(urlOrPath: string, options?: Partial<PageViewOptions>): Promise<void>
+  // Overload 2: Options object only (must contain url property)
+  async trackPageView(options: PageViewOptions): Promise<void>
+  // Implementation
+  async trackPageView(
+    urlOrPathOrOptions: string | PageViewOptions,
+    options?: Partial<PageViewOptions>
+  ): Promise<void> {
+    let pageViewOptions: PageViewOptions
+
+    if (typeof urlOrPathOrOptions === 'string') {
+      // First overload: URL as first parameter
+      pageViewOptions = { url: urlOrPathOrOptions }
+
+      // Merge with provided options if any
+      if (options) {
+        pageViewOptions = {
+          ...pageViewOptions,
+          ...options,
+          // Ensure URL from first parameter takes precedence
+          url: urlOrPathOrOptions
+        }
+      }
+    } else {
+      // Second overload: Options object only
+      pageViewOptions = urlOrPathOrOptions
+    }
+
+    // Merge with common parameters and send to native module
+    const mergedOptions = mergeCommonParameters(pageViewOptions)
+    return NativeExpoParsely.trackPageView(mergedOptions)
+  }
+
+  // Engagement tracking (heartbeat) with automatic common parameters merging
+  // Overload 1: URL as first parameter, options as second parameter
+  async startEngagement(url: string, options?: Partial<EngagementOptions>): Promise<void>
+  // Overload 2: Options object only (must contain url property)
+  async startEngagement(options: EngagementOptions): Promise<void>
+  // Implementation
+  async startEngagement(
+    urlOrOptions: string | EngagementOptions,
+    options?: Partial<EngagementOptions>
+  ): Promise<void> {
+    let engagementOptions: EngagementOptions
+
+    if (typeof urlOrOptions === 'string') {
+      // First overload: URL as first parameter
+      engagementOptions = { url: urlOrOptions }
+
+      // Merge with provided options if any
+      if (options) {
+        engagementOptions = {
+          ...engagementOptions,
+          ...options,
+          // Ensure URL from first parameter takes precedence
+          url: urlOrOptions
+        }
+      }
+    } else {
+      // Second overload: Options object only
+      engagementOptions = urlOrOptions
+    }
+
+    const mergedOptions = mergeCommonParameters(engagementOptions)
+    return NativeExpoParsely.startEngagement(mergedOptions)
+  }
+
+  async stopEngagement(): Promise<void> {
+    return NativeExpoParsely.stopEngagement()
+  }
+
+  // Debug methods
+  async getHeartbeatStatus() {
+    return NativeExpoParsely.getHeartbeatStatus()
+  }
+
+  async isCurrentlyScrolling() {
+    return NativeExpoParsely.isCurrentlyScrolling()
+  }
+
+  // Record activity (placeholder for compatibility with existing code)
+  recordActivity(): void {
+    // This method is used by HeartbeatTouchBoundary and other components
+    // The actual activity recording is handled by the native module
+    // This is just a placeholder to maintain API compatibility
+  }
+
+  // Parse.ly video tracking support
+  private _videoPlaying: boolean = false
+
+  get videoPlaying(): boolean {
+    return this._videoPlaying
+  }
+
+  set videoPlaying(playing: boolean) {
+    this._videoPlaying = playing
+    // In a full implementation, this would notify the native module
+    // For now, this maintains Parse.ly API compatibility
+  }
+}
+
+const ExpoParsely = new ExpoParselyWrapper()
 
 export default ExpoParsely

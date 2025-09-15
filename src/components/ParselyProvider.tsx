@@ -1,68 +1,28 @@
-import { ReactNode, useCallback } from 'react'
+import React, { createContext, useCallback, useContext, useEffect } from 'react'
 
+import type { ActivityDetectionConfig, ParselyProviderProps, TrackingContextValue } from '../ExpoParsely.types'
 import ExpoParsely from '../ExpoParselyModule'
-import { TrackingProvider, useReanimatedHeartbeat } from '../index'
+import { HeartbeatDebugProvider } from './HeartbeatDebugOverlay'
 import { HeartbeatTouchBoundary } from './HeartbeatTouchBoundary'
+import { useReanimatedHeartbeat } from '../hooks/useReanimatedHeartbeat'
 
-interface ParselyProviderProps {
-  children: ReactNode
-  /** Site ID for Parse.ly */
-  siteId?: string
-  /** Whether to auto-initialize Parse.ly SDK */
-  autoInitialize?: boolean
-  /** Flush interval for Parse.ly */
-  flushInterval?: number
-  /** Whether to run in dry-run mode */
-  dryRun?: boolean
-  /** Heartbeat configuration */
-  heartbeatConfig?: {
-    enableHeartbeats?: boolean
-    inactivityThresholdMs?: number
-    intervalMs?: number
-    maxDurationMs?: number
-  }
-  /** Activity detection configuration */
-  activityDetectionConfig?: {
-    enableTouchDetection?: boolean
-    enableScrollDetection?: boolean
-    touchThrottleMs?: number
-    scrollThrottleMs?: number
-    scrollThreshold?: number
-  }
-  /** Whether to enable debug logging */
-  enableDebugLogging?: boolean
+const isDev = __DEV__
+
+// Default activity detection configuration
+const DEFAULT_ACTIVITY_DETECTION_CONFIG: ActivityDetectionConfig = {
+  touchThrottleMs: 100,
+  scrollThrottleMs: 1000,
+  scrollThreshold: 5
 }
 
-// Hook to get heartbeat recordActivity function
-const useHeartbeatActivity = (heartbeatConfig?: ParselyProviderProps['heartbeatConfig']) => {
-  const { recordActivity: heartbeatRecordActivity } = useReanimatedHeartbeat(heartbeatConfig)
-  return heartbeatRecordActivity
-}
+const TrackingContext = createContext<TrackingContextValue | null>(null)
 
-// Internal component that uses useReanimatedHeartbeat hook
-const HeartbeatWrapper: React.FC<{
-  children: ReactNode
-  heartbeatConfig?: ParselyProviderProps['heartbeatConfig']
-  enableDebugLogging?: boolean
-  onHeartbeatActivity?: () => void
-}> = ({ children, heartbeatConfig, enableDebugLogging, onHeartbeatActivity }) => {
-  const handleTouchActivity = useCallback(() => {
-    // Record activity for Parse.ly native module
-    ExpoParsely.recordActivity()
-
-    // Reset heartbeat timer
-    onHeartbeatActivity?.()
-
-    if (__DEV__ && enableDebugLogging) {
-      console.log('🎯 [ParselyProvider] Touch activity detected - recorded in Parse.ly and reset heartbeat timer')
-    }
-  }, [onHeartbeatActivity, enableDebugLogging])
-
-  return (
-    <HeartbeatTouchBoundary onTouchActivity={handleTouchActivity} onHeartbeatActivity={onHeartbeatActivity}>
-      {children}
-    </HeartbeatTouchBoundary>
-  )
+export const useTrackingContext = () => {
+  const context = useContext(TrackingContext)
+  if (!context) {
+    throw new Error('useTrackingContext must be used within a TrackingProvider')
+  }
+  return context
 }
 
 /**
@@ -75,50 +35,72 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
   autoInitialize = true,
   flushInterval = 150,
   dryRun = false,
+  enableDebugLogging = __DEV__,
   heartbeatConfig = {
     enableHeartbeats: true,
-    inactivityThresholdMs: 30000,
-    intervalMs: 10000,
-    maxDurationMs: 7200000 // 2 hours
+    secondsBetweenHeartbeats: 150, // Parse.ly standard: 150 seconds
+    activeTimeout: 5, // Parse.ly standard: 5 seconds
+    onHeartbeat: undefined, // Optional Parse.ly callback
+    videoPlaying: false // Parse.ly video tracking
   },
-  activityDetectionConfig = {
-    enableTouchDetection: true,
-    enableScrollDetection: true,
-    touchThrottleMs: 100,
-    scrollThrottleMs: 1000,
-    scrollThreshold: 5
-  },
-  enableDebugLogging = false
+  activityDetectionConfig = DEFAULT_ACTIVITY_DETECTION_CONFIG
 }) => {
-  // Conditionally wrap with HeartbeatTouchBoundary if heartbeats are enabled
-  const enableHeartbeats = heartbeatConfig?.enableHeartbeats ?? true
+  // Initialize Parse.ly SDK
+  useEffect(() => {
+    if (autoInitialize && siteId) {
+      try {
+        ExpoParsely.init(siteId)
+        if (isDev) {
+          console.log('🔵 [Parse.ly] Parse.ly initialized successfully', { siteId })
+        }
+      } catch (error) {
+        console.error('Failed to initialize Parse.ly:', error)
+      }
+    }
+  }, [autoInitialize, siteId])
 
-  // Get heartbeat recordActivity function
-  const heartbeatRecordActivity = useHeartbeatActivity(heartbeatConfig)
+  // Initialize heartbeat tracking
+  const { startHeartbeat, stopHeartbeat, isActive } = useReanimatedHeartbeat(heartbeatConfig)
 
-  const content = enableHeartbeats ? (
-    <HeartbeatWrapper
-      heartbeatConfig={heartbeatConfig}
-      enableDebugLogging={enableDebugLogging}
-      onHeartbeatActivity={heartbeatRecordActivity}>
-      {children}
-    </HeartbeatWrapper>
-  ) : (
-    <>{children}</>
-  )
+  // Start heartbeat when provider mounts
+  useEffect(() => {
+    startHeartbeat()
+    return () => {
+      stopHeartbeat().catch(error => {
+        if (isDev) console.error('Failed to stop heartbeat on cleanup:', error)
+      })
+    }
+  }, [startHeartbeat, stopHeartbeat])
+
+  // Tracking functionality
+  const trackPageView = useCallback((context?: Partial<Record<string, any>>) => {
+    try {
+      if (context?.url) {
+        ExpoParsely.trackPageView(context.url, {
+          metadata: {
+            section: context.section || 'Unknown',
+            title: context.title || ''
+          }
+        })
+      }
+    } catch (error) {
+      if (isDev) console.error('ParselyProvider trackPageView failed:', error)
+    }
+  }, [])
+
+  const trackingContextValue: TrackingContextValue = {
+    trackPageView,
+    isActive
+  }
+
+  const enableHeartbeats = heartbeatConfig.enableHeartbeats ?? true
+
+  const content = enableHeartbeats ? <HeartbeatTouchBoundary>{children}</HeartbeatTouchBoundary> : <>{children}</>
 
   return (
-    <TrackingProvider
-      autoInitialize={autoInitialize}
-      siteId={siteId}
-      flushInterval={flushInterval}
-      dryRun={dryRun}
-      heartbeatConfig={heartbeatConfig}
-      activityDetectionConfig={activityDetectionConfig}
-      enableDebugLogging={enableDebugLogging}
-      recordHeartbeatActivity={heartbeatRecordActivity}>
-      {content}
-    </TrackingProvider>
+    <TrackingContext.Provider value={trackingContextValue}>
+      <HeartbeatDebugProvider>{content}</HeartbeatDebugProvider>
+    </TrackingContext.Provider>
   )
 }
 

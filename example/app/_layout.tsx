@@ -10,16 +10,14 @@ const RootLayout = () => {
       autoInitialize={true}
       flushInterval={5000}
       dryRun={false}
-      enableDebugLogging={__DEV__}
+      enableDebugLogging={true} // Enable debug logging for demonstration
       heartbeatConfig={{
         enableHeartbeats: true,
-        inactivityThresholdMs: 5000,
-        intervalMs: 10000,
-        maxDurationMs: 1800000
+        secondsBetweenHeartbeats: 150, // Parse.ly standard: 150 seconds
+        activeTimeout: 5, // Parse.ly standard: 5 seconds after interaction
+        videoPlaying: false // Parse.ly video tracking support
       }}
       activityDetectionConfig={{
-        enableTouchDetection: true,
-        enableScrollDetection: true,
         touchThrottleMs: 500,
         scrollThrottleMs: 1000,
         scrollThreshold: 5.0

@@ -1,15 +1,13 @@
 {
   "name": "@appik-studio/expo-parsely",
-  "version": "0.2.2",
-  "description": "Enhanced Expo plugin for Parse.ly Analytics SDK - comprehensive engagement tracking, heartbeat monitoring, and cross-platform analytics for React Native and Expo apps",
+  "version": "0.2.3",
+  "description": "Enhanced Parse.ly Analytics SDK for React Native and Expo - comprehensive engagement tracking, heartbeat monitoring, and cross-platform analytics",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
     "build",
     "android",
     "ios",
-    "plugin/build",
-    "app.plugin.js",
     "expo-module.config.json",
     "API_REFERENCE.md"
   ],
@@ -18,7 +16,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": " expo-module build",
+    "build": "timeout 10 expo-module build",
     "clean": "expo-module clean",
     "lint": "expo-module lint",
     "test": "expo-module test",
@@ -36,10 +34,8 @@
     "expo-module": "expo-module",
     "open:ios": "xed example/ios",
     "open:android": "open -a \"Android Studio\" example/android",
-    "build:plugin": "tsc --build ./plugin/tsconfig.json",
-    "build:all": "bun run build && bun run build:plugin",
-    "ios:refresh": "bun run build:plugin && cd example && bun run expo:prebuild-clean-ios && bun run ios:pod-install && bun run ios",
-    "android:refresh": "bun run build:plugin && cd example && bun run expo:prebuild-clean-android && bun run android"
+    "ios:refresh": "bun run build ; cd example && bun run expo:prebuild-clean-ios && bun run ios:pod-install && bun run ios",
+    "android:refresh": "bun run build ; cd example && bun run expo:prebuild-clean-android && bun run android"
   },
   "keywords": [
     "react-native",
@@ -63,7 +59,6 @@
   "license": "MIT",
   "homepage": "https://github.com/appik-studio/expo-parsely#readme",
   "devDependencies": {
-    "@expo/config-plugins": "~10.1.1",
     "@types/react": "~19.0.0",
     "eslint": "8.57.0",
     "expo": "53.0.22",
@@ -77,8 +72,5 @@
     "expo": "*",
     "react": "*",
     "react-native": "*"
-  },
-  "expo": {
-    "plugin": "./app.plugin.js"
   }
 }

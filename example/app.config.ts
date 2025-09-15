@@ -17,12 +17,6 @@ module.exports = {
     },
     plugins: [
       [
-        '../app.plugin.js',
-        {
-          siteId: 'example.com'
-        }
-      ],
-      [
         'expo-build-properties',
         {
           ios: {

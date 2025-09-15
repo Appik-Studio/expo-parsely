@@ -1,6 +1,6 @@
 # 📊 expo-parsely
 
-Enhanced Expo plugin for Parse.ly Analytics SDK - provides comprehensive engagement tracking, heartbeat monitoring, and cross-platform analytics for React Native and Expo apps.
+Enhanced Parse.ly Analytics SDK for React Native and Expo - provides comprehensive engagement tracking, heartbeat monitoring, and cross-platform analytics.
 
 ## ✨ Features
 
@@ -82,28 +82,14 @@ npm login --scope=@appik-studio --registry=https://npm.pkg.github.com
 
 ## ⚙️ Configuration
 
-Add the plugin to your `app.json` or `app.config.js`:
-
-```json
-{
-  "expo": {
-    "plugins": [
-      [
-        "@appik-studio/expo-parsely",
-        {
-          "siteId": "your-parsely-site-id"
-        }
-      ]
-    ]
-  }
-}
-```
+Configuration is done through the `ParselyProvider` component in your app:
 
 ### Configuration Options
 
-| Option   | Type   | Required | Default | Description                   |
-| -------- | ------ | -------- | ------- | ----------------------------- |
-| `siteId` | string | ✅       | -       | Your Parse.ly site identifier |
+| Option               | Type    | Required | Default   | Description                            |
+| -------------------- | ------- | -------- | --------- | -------------------------------------- |
+| `siteId`             | string  | ✅       | -         | Your Parse.ly site identifier          |
+| `enableDebugLogging` | boolean | ❌       | `__DEV__` | Enable debug logging across the module |
 
 ## 📖 Usage
 
@@ -259,6 +245,43 @@ function MyScreen() {
 }
 ```
 
+### 🎬 Parse.ly Video Tracking
+
+Parse.ly's engaged-time methodology includes special support for video content. When video is playing, users are considered "engaged" even without other interactions.
+
+```typescript
+import { useReanimatedHeartbeat } from '@appik-studio/expo-parsely'
+
+function VideoPlayer({ videoUrl }) {
+  const { setVideoPlaying } = useReanimatedHeartbeat()
+
+  const handleVideoStart = () => {
+    // Notify Parse.ly that video is playing
+    setVideoPlaying(true)
+  }
+
+  const handleVideoStop = () => {
+    // Notify Parse.ly that video stopped
+    setVideoPlaying(false)
+  }
+
+  return (
+    <VideoComponent
+      source={{ uri: videoUrl }}
+      onPlay={handleVideoStart}
+      onPause={handleVideoStop}
+      onEnd={handleVideoStop}
+    />
+  )
+}
+```
+
+**Parse.ly Engagement Formula:**
+
+> `video playing OR (interacted recently AND window in focus)`
+
+This matches Parse.ly's official [engaged-time documentation](https://docs.parse.ly/engaged-time/) methodology.
+
 ### Debug Overlay
 
 For development and testing, use the HeartbeatDebugOverlay component:
@@ -301,7 +324,6 @@ ExpoParsely.configureHeartbeat({
 // Configure activity detection
 ExpoParsely.configureActivityDetection({
   enableTouchDetection: true,
-  enableScrollDetection: true,
   touchThrottleMs: 500,
   scrollThrottleMs: 2000,
   scrollThreshold: 5
@@ -322,6 +344,68 @@ ExpoParsely.recordActivity()
 // are now handled internally for optimal performance
 ```
 
+### Common Parameters
+
+Set parameters once that will be automatically included with all tracking calls:
+
+```typescript
+import ExpoParsely from '@appik-studio/expo-parsely'
+
+// Set common parameters for all tracking calls
+ExpoParsely.setCommonParameters({
+  metadata: {
+    section: 'mobile-app',
+    authors: ['Mobile Team']
+  },
+  extraData: {
+    app_version: '1.2.3',
+    platform: 'ios',
+    user_type: 'premium'
+  },
+  siteId: 'your-default-site-id'
+})
+
+// Now all trackPageView calls automatically include common parameters
+// Method 1: URL as first parameter, options as second (iOS SDK style)
+ExpoParsely.trackPageView('https://example.com/simple-article')
+
+ExpoParsely.trackPageView('https://example.com/article/123', {
+  metadata: {
+    title: 'My Article' // Merged with common metadata
+  }
+})
+
+// Method 2: Options object only (traditional style)
+ExpoParsely.trackPageView({
+  url: 'https://example.com/article/456',
+  metadata: {
+    title: 'Another Article',
+    section: 'news'
+  }
+})
+
+// Start engagement tracking (heartbeat)
+// Method 1: URL as first parameter
+ExpoParsely.startEngagement('https://example.com/article/123')
+
+// Method 1: URL with options
+ExpoParsely.startEngagement('https://example.com/article/123', {
+  extraData: { reading_time: 300 }
+})
+
+// Method 2: Options object only
+ExpoParsely.startEngagement({
+  url: 'https://example.com/article/123',
+  extraData: { reading_time: 300 }
+})
+
+// Get current common parameters
+const params = ExpoParsely.getCommonParameters()
+
+// Clear common parameters (e.g., on user logout)
+ExpoParsely.clearCommonParameters()
+```
+
 ## 🔧 API Reference
 
 ### ExpoParsely (Main Module)
@@ -330,9 +414,11 @@ Main class for Parse.ly SDK operations.
 
 #### Core Methods
 
-- `init(siteId: string, flushInterval?: number, dryRun?: boolean): void` - Initialize SDK
-- `trackPageView(url: string, urlRef?: string, metadata?: ParselyMetadata, extraData?: ExtraData, siteId?: string): void` - Track page views
-- `startEngagement(url: string, urlRef?: string, extraData?: ExtraData, siteId?: string): void` - Start engagement tracking (includes automatic heartbeat monitoring)
+- `init(siteId: string): void` - Initialize SDK
+- `trackPageView(urlOrPath: string, options?: Partial<PageViewOptions>): void` - Track page views with URL as first parameter
+- `trackPageView(options: PageViewOptions): void` - Track page views with options object (must contain url property)
+- `startEngagement(url: string, options?: Partial<EngagementOptions>): void` - Start engagement tracking with URL as first parameter
+- `startEngagement(options: EngagementOptions): void` - Start engagement tracking with options object (must contain url property)
 - `stopEngagement(): void` - Stop engagement tracking (includes automatic heartbeat cleanup)
 
 #### Enhanced Methods
@@ -340,6 +426,12 @@ Main class for Parse.ly SDK operations.
 - `configureHeartbeat(config: HeartbeatConfig): void` - Configure heartbeat settings
 - `configureActivityDetection(config: ActivityDetectionConfig): void` - Configure activity detection
 - `recordActivity(): void` - Record user activity manually
+
+#### Common Parameters Methods
+
+- `setCommonParameters(params: CommonParameters): void` - Set parameters that will be automatically included with all tracking calls
+- `getCommonParameters(): CommonParameters` - Get currently set common parameters
+- `clearCommonParameters(): void` - Clear all common parameters
 
 #### Element Tracking Methods
 
@@ -372,15 +464,44 @@ export default function App() {
       siteId="your-site-id"
       heartbeatConfig={{
         enableHeartbeats: true,
-        inactivityThresholdMs: 30000,
-        intervalMs: 10000,
-        maxDurationMs: 7200000
+        secondsBetweenHeartbeats: 150, // Parse.ly standard: 150 seconds
+        activeTimeout: 5, // Parse.ly standard: 5 seconds
+        onHeartbeat: (engagedSeconds) => console.log(`Engaged: ${engagedSeconds}s`),
+        videoPlaying: false // Set to true when video content is playing
       }}
     >
       {/* Your app content */}
     </ParselyProvider>
   );
 }
+```
+
+### 🔧 Debug Logging
+
+The `enableDebugLogging` prop controls debug logging across the entire Parse.ly module. When enabled, you'll see detailed console messages prefixed with "💓 [Parse.ly Debug]" for:
+
+- **Heartbeat Events**: Every 150 seconds when engaged
+- **Activity Detection**: Touch, scroll, and interaction events
+- **Engagement Tracking**: Session start/stop and engagement calculations
+- **Video Tracking**: Video play/pause state changes
+- **SDK Initialization**: Parse.ly SDK setup and configuration
+
+```typescript
+// Enable debug logging in development
+<ParselyProvider
+  siteId="your-site-id"
+  enableDebugLogging={__DEV__} // true in dev, false in production
+>
+  {/* Your app */}
+</ParselyProvider>
+
+// Force enable for debugging in production
+<ParselyProvider
+  siteId="your-site-id"
+  enableDebugLogging={true} // Always enabled
+>
+  {/* Your app */}
+</ParselyProvider>
 ```
 
 #### HeartbeatDebugOverlay
@@ -406,17 +527,17 @@ import { HeartbeatDebugOverlay } from '@appik-studio/expo-parsely'
 
 ### Hooks
 
-#### useHeartbeat(config?: HeartbeatConfig)
+#### useReanimatedHeartbeat(config?: HeartbeatConfig)
 
-Hook for managing heartbeat tracking.
+Hook for managing heartbeat tracking with Parse.ly engagement integration.
 
 **Returns:**
 
-- `status: HeartbeatStatus` - Current heartbeat status
-- `recordActivity: () => void` - Record activity manually
-- `startTracking: () => void` - Start heartbeat tracking
-- `stopTracking: () => void` - Stop heartbeat tracking
-- `isActive: boolean` - Whether tracking is active
+- `startHeartbeat: (url?: string) => Promise<void>` - Start heartbeat tracking, optionally with URL for engagement
+- `stopHeartbeat: () => Promise<void>` - Stop heartbeat tracking and engagement
+- `recordActivity: () => void` - Record user activity
+- `isActive: boolean` - Current heartbeat status
+- `config: HeartbeatConfig` - Final configuration used
 
 #### useHeartbeatDebug()
 
@@ -442,15 +563,14 @@ interface ParselyMetadata {
 }
 
 interface HeartbeatConfig {
-  enableHeartbeats?: boolean
-  inactivityThresholdMs?: number
-  intervalMs?: number
-  maxDurationMs?: number
+  enableHeartbeats?: boolean // Enable/disable heartbeat tracking (default: true)
+  secondsBetweenHeartbeats?: number // Parse.ly standard: 150 seconds between heartbeats
+  activeTimeout?: number // Parse.ly standard: 5 seconds after interaction
+  onHeartbeat?: (engagedSeconds: number) => void // Parse.ly callback for each heartbeat
+  videoPlaying?: boolean // Parse.ly video tracking support
 }
 
 interface ActivityDetectionConfig {
-  enableTouchDetection?: boolean
-  enableScrollDetection?: boolean
   touchThrottleMs?: number
   scrollThrottleMs?: number
   scrollThreshold?: number
@@ -516,8 +636,6 @@ bun install
 # Build the module
 bun run build
 
-# Build the plugin
-bun run build:plugin
 
 # Lint
 bun run lint
@@ -525,17 +643,11 @@ bun run lint
 # Test
 bun run test
 
-# Run example on iOS
+# Open iOS project
 bun run open:ios
 
-# Run example on Android
+# Open Android project
 bun run open:android
-
-# Refresh iOS build
-bun run ios:refresh
-
-# Refresh Android build
-bun run android:refresh
 ````
 
 ### Testing Local Changes

@@ -53,6 +53,7 @@ repositories {
 dependencies {
     implementation project(':expo-modules-core')
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion"
+    implementation 'com.parsely:parsely:4.1.1'
 }
 
 allprojects {

@@ -1,318 +1,118 @@
 import ExpoModulesCore
 import ParselyAnalytics
-import Foundation
 
 public class ExpoParselyModule: Module {
-  // Enhanced activity tracking properties
-  private var isHeartbeatActive = false
-  private var heartbeatTimer: Timer?
-  private var heartbeatIntervalMs: Int64 = 15000 // Default: 15 seconds
-  private var inactivityThresholdMs: Int64 = 5000 // Default: 5 seconds
-  private var maxDurationMs: Int64 = 3600000 // Default: 1 hour
-  private var lastActivityTime: Int64 = 0
-  private var sessionStartTime: Int64 = 0
-  private var totalActivities: Int64 = 0
-  private var totalHeartbeats: Int64 = 0
-  private var isScrolling = false
-
-  // Video tracking state
-  private var currentVideoUrl: String = ""
-  private var currentVideoId: String = ""
-
-  // Activity detection config (handled by HeartbeatTouchBoundary component)
-  private var enableTouchDetection = true
-  private var enableScrollDetection = true
-  private var touchThrottleMs: Int64 = 500
-  private var scrollThrottleMs: Int64 = 2000
-
-  // Component tracking registry
-  private var componentTrackingRegistry: [String: [String: Any]] = [:]
-
   public func definition() -> ModuleDefinition {
     Name("ExpoParsely")
 
-    Function("init") { (siteId: String, flushInterval: Int?, dryRun: Bool?) in
-      do {
-        Parsely.sharedInstance.configure(siteId: siteId)
-        self.recordActivity() // Initialize activity tracking
-      } catch {
-        print("ExpoParsely init error: \(error.localizedDescription)")
+    // Configure the Parsely tracker
+    Function("init") { (siteId: String) in
+      Parsely.sharedInstance.configure(siteId: siteId)
+    }
+
+    // Track page view
+    Function("trackPageView") { (options: [String: Any]) in
+      if let url = options["url"] as? String {
+        let urlref = options["urlref"] as? String
+        let siteId = options["siteId"] as? String
+
+        // Handle metadata if provided
+        var metadata: ParselyMetadata?
+        if let metadataDict = options["metadata"] as? [String: Any] {
+          metadata = createParselyMetadata(from: metadataDict)
+        }
+
+        // Handle extra data
+        let extraData = options["extraData"] as? [String: Any]
+
+        Parsely.sharedInstance.trackPageView(
+          url: url,
+          urlref: urlref ?? "",
+          metadata: metadata,
+          extraData: extraData
+        )
+      } else {
+        // Handle case where options is not a dictionary
+        print("ExpoParsely: Invalid options format")
       }
     }
 
-    Function("trackPageView") { (params: [String: Any]) in
-      do {
-        guard let url = params["url"] as? String,
-              let urlObj = URL(string: url) else {
-          print("ExpoParsely: Invalid URL in params: \(params)")
-          return
-        }
+    // Engagement tracking
+    Function("startEngagement") { (options: [String: Any]) in
+      if let url = options["url"] as? String {
+        let urlref = options["urlref"] as? String
+        let extraData = options["extraData"] as? [String: Any]
+        let siteId = options["siteId"] as? String
 
-        let urlRef = params["urlRef"] as? String ?? ""
-        let siteId = params["siteId"] as? String ?? ""
-        let metadata = params["metadata"] as? [String: Any]
-        let extraData = params["extraData"] as? [String: Any]
-        let action = params["action"] as? String
-        let customData = params["data"] as? [String: Any]
-
-        // Merge custom data with extraData for Parse.ly
-        var finalExtraData = extraData ?? [:]
-        if let customData = customData {
-            finalExtraData.merge(customData) { (_, new) in new }
-        }
-
-        // Send page view to Parsely with enhanced metadata
-        if let action = action {
-            // Custom event with action
-            Parsely.sharedInstance.trackPageView(url: urlObj.absoluteString, urlref: urlRef, extraData: finalExtraData, siteId: siteId, action: action)
-        } else {
-            // Regular page view
-            Parsely.sharedInstance.trackPageView(url: urlObj.absoluteString, urlref: urlRef, extraData: finalExtraData, siteId: siteId)
-        }
-
-        self.recordActivity()
-      } catch {
-        print("ExpoParsely trackPageView error: \(error.localizedDescription)")
-      }
-    }
-
-    Function("startEngagement") { (params: [String: Any]) in
-      do {
-        guard let url = params["url"] as? String,
-              let urlObj = URL(string: url) else {
-          print("ExpoParsely: Invalid URL in params: \(params)")
-          return
-        }
-
-        let urlRef = params["urlRef"] as? String ?? ""
-        let siteId = params["siteId"] as? String ?? ""
-        let extraData = params["extraData"] as? [String: Any]
-
-        Parsely.sharedInstance.startEngagement(url: urlObj.absoluteString, urlref: urlRef, extraData: extraData, siteId: siteId)
-        self.recordActivity()
-        self.startHeartbeatTrackingInternal()
-      } catch {
-        print("ExpoParsely startEngagement error: \(error.localizedDescription)")
+        Parsely.sharedInstance.startEngagement(
+          url: url,
+          urlref: urlref ?? "",
+          extraData: extraData
+        )
       }
     }
 
     Function("stopEngagement") {
-      do {
-        Parsely.sharedInstance.stopEngagement()
-        self.stopHeartbeatTrackingInternal()
-      } catch {
-        print("ExpoParsely stopEngagement error: \(error.localizedDescription)")
-      }
+      Parsely.sharedInstance.stopEngagement()
     }
 
+    // Conversion tracking is handled through trackPageView with conversion URLs
+    // Use URLs like 'conversion://lead_capture', 'conversion://newsletter_signup', etc.
+    // Include conversion parameters in extraData
 
-    // Enhanced Heartbeat and Activity Detection Implementation
-    Function("configureHeartbeat") { (config: [String: Any]) in
-      config["inactivityThresholdMs"].flatMap { $0 as? Int64 }.map { self.inactivityThresholdMs = $0 }
-      config["intervalMs"].flatMap { $0 as? Int64 }.map { self.heartbeatIntervalMs = $0 }
-      config["maxDurationMs"].flatMap { $0 as? Int64 }.map { self.maxDurationMs = $0 }
-    }
+    // Video tracking
+    Function("trackPlay") { (options: [String: Any]) in
+      if let url = options["url"] as? String,
+         let videoID = options["videoID"] as? String,
+         let duration = options["duration"] as? Double {
 
-    Function("configureActivityDetection") { (config: [String: Any]) in
-      config["enableTouchDetection"].flatMap { $0 as? Bool }.map { self.enableTouchDetection = $0 }
-      config["enableScrollDetection"].flatMap { $0 as? Bool }.map { self.enableScrollDetection = $0 }
-      config["touchThrottleMs"].flatMap { $0 as? Int64 }.map { self.touchThrottleMs = $0 }
-      config["scrollThrottleMs"].flatMap { $0 as? Int64 }.map { self.scrollThrottleMs = $0 }
-    }
+        let urlref = options["urlref"] as? String
+        let siteId = options["siteId"] as? String
 
-    Function("recordActivity") {
-      self.recordActivity()
-    }
-
-
-
-
-
-
-    // Video tracking methods
-    Function("trackPlay") { (url: String, videoMetadata: [String: Any], urlRef: String?, extraData: [String: Any]?, siteId: String?) in
-      do {
-        guard let urlObj = URL(string: url) else {
-          print("ExpoParsely: Invalid URL: \(url)")
-          return
+        var metadata: ParselyMetadata?
+        if let metadataDict = options["metadata"] as? [String: Any] {
+          metadata = createParselyMetadata(from: metadataDict)
         }
-        let videoID = videoMetadata["videoId"] as? String ?? ""
-        let duration = videoMetadata["duration"] as? TimeInterval ?? 0
-        let metadata = ParselyMetadata(
-          canonical_url: videoMetadata["canonical_url"] as? String,
-          pub_date: videoMetadata["pub_date"] as? Date,
-          title: videoMetadata["title"] as? String,
-          authors: videoMetadata["authors"] as? [String],
-          image_url: videoMetadata["image_url"] as? String,
-          section: videoMetadata["section"] as? String,
-          tags: videoMetadata["tags"] as? [String],
-          duration: videoMetadata["duration"] as? TimeInterval
-        )
-        // Store current video state for resetVideo
-        self.currentVideoUrl = urlObj.absoluteString
-        self.currentVideoId = videoID
 
-        Parsely.sharedInstance.trackPlay(url: urlObj.absoluteString, urlref: urlRef ?? "", videoID: videoID, duration: duration, metadata: metadata, extraData: extraData, siteId: siteId ?? "")
-        self.recordActivity()
-      } catch {
-        print("ExpoParsely trackPlay error: \(error.localizedDescription)")
+        let extraData = options["extraData"] as? [String: Any]
+
+        Parsely.sharedInstance.trackPlay(
+          url: url,
+          urlref: urlref ?? "",
+          videoID: videoID,
+          duration: duration,
+          metadata: metadata,
+          extraData: extraData
+        )
       }
     }
 
     Function("trackPause") {
-      do {
-        Parsely.sharedInstance.trackPause()
-      } catch {
-        print("ExpoParsely trackPause error: \(error.localizedDescription)")
-      }
+      Parsely.sharedInstance.trackPause()
     }
 
-    Function("resetVideo") {
-      do {
-        if !self.currentVideoUrl.isEmpty && !self.currentVideoId.isEmpty {
-          Parsely.sharedInstance.resetVideo(url: self.currentVideoUrl, videoID: self.currentVideoId)
-        }
-      } catch {
-        print("ExpoParsely resetVideo error: \(error.localizedDescription)")
-      }
+    Function("resetVideo") { (url: String, videoID: String) in
+      Parsely.sharedInstance.resetVideo(url: url, videoID: videoID)
     }
 
-    // Component tracking methods
-    Function("registerComponentTracking") { (config: [String: Any]) -> String in
-      return self.registerComponentTrackingInternal(config: config)
+    // Heartbeat management
+    Function("startHeartbeat") { (config: [String: Any]?) in
+      // For now, delegate to startEngagement with default URL
+      // In a more advanced implementation, this could manage custom heartbeat timers
+      Parsely.sharedInstance.startEngagement(url: "app://heartbeat")
     }
 
-    Function("unregisterComponentTracking") { (trackingId: String) in
-      self.unregisterComponentTrackingInternal(trackingId: trackingId)
-    }
-
-    // Heartbeat status methods
-    Function("getHeartbeatStatus") { () -> [String: Any] in
-      return self.getHeartbeatStatusInternal()
-    }
-
-    Function("startHeartbeatTracking") {
-      self.startHeartbeatTrackingInternal()
-    }
-
-    Function("stopHeartbeatTracking") {
-      self.stopHeartbeatTrackingInternal()
-    }
-
-    // Scroll state methods
-    Function("isCurrentlyScrolling") { () -> Bool in
-      return self.isCurrentlyScrollingInternal()
-    }
-
-    Function("setScrollState") { (scrolling: Bool) in
-      self.setScrollStateInternal(scrolling: scrolling)
+    Function("stopHeartbeat") {
+      Parsely.sharedInstance.stopEngagement()
     }
   }
 
-  // MARK: - Private Methods
-
-  private func recordActivity() {
-    lastActivityTime = Int64(Date().timeIntervalSince1970 * 1000)
-    totalActivities += 1
-    #if DEBUG
-    print("🎯 [ExpoParsely] Activity recorded - Total: \(totalActivities), Last activity: \(lastActivityTime)")
-    #endif
+  private func createParselyMetadata(from dict: [String: Any]) -> ParselyMetadata {
+    // Create metadata with basic properties that are accessible
+    let title = dict["title"] as? String ?? ""
+    let section = dict["section"] as? String ?? ""
+    
+    return ParselyMetadata(title: title, section: section)
   }
-
-  private func checkHeartbeat() {
-    guard isHeartbeatActive else { return }
-
-    let currentTime = Int64(Date().timeIntervalSince1970 * 1000)
-    let timeSinceActivity = currentTime - lastActivityTime
-    let sessionDuration = currentTime - sessionStartTime
-
-    #if DEBUG
-    print("💓 [ExpoParsely] Heartbeat check - Time since activity: \(timeSinceActivity)ms, Session duration: \(sessionDuration)ms")
-    #endif
-
-    // Check if user has been inactive for too long
-    if timeSinceActivity > inactivityThresholdMs {
-      #if DEBUG
-      print("💓 [ExpoParsely] Stopping heartbeat due to inactivity")
-      #endif
-      stopHeartbeatTrackingInternal()
-      return
-    }
-
-    // Check if session has exceeded max duration
-    if sessionDuration > maxDurationMs {
-      #if DEBUG
-      print("💓 [ExpoParsely] Stopping heartbeat due to max duration")
-      #endif
-      stopHeartbeatTrackingInternal()
-      return
-    }
-
-    // Send heartbeat
-    totalHeartbeats += 1
-    #if DEBUG
-    print("💓 [ExpoParsely] Heartbeat sent - Total: \(totalHeartbeats)")
-    #endif
-  }
-
-  private func startHeartbeatTrackingInternal() {
-    if self.isHeartbeatActive { return }
-
-    self.isHeartbeatActive = true
-    let currentTime = Int64(Date().timeIntervalSince1970 * 1000)
-    self.sessionStartTime = currentTime
-    self.lastActivityTime = currentTime
-
-    let interval = TimeInterval(self.heartbeatIntervalMs) / 1000.0
-    #if DEBUG
-    print("💓 [ExpoParsely] Starting heartbeat tracking - Interval: \(interval)s, Inactivity threshold: \(inactivityThresholdMs)ms")
-    #endif
-    self.heartbeatTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
-      self.checkHeartbeat()
-    }
-  }
-
-  private func stopHeartbeatTrackingInternal() {
-    isHeartbeatActive = false
-    heartbeatTimer?.invalidate()
-    heartbeatTimer = nil
-  }
-
-  private func getHeartbeatStatusInternal() -> [String: Any] {
-    let currentTime = Int64(Date().timeIntervalSince1970 * 1000)
-    return [
-      "isActive": self.isHeartbeatActive,
-      "lastActivity": self.lastActivityTime,
-      "sessionDuration": currentTime - self.sessionStartTime,
-      "totalActivities": self.totalActivities,
-      "totalHeartbeats": self.totalHeartbeats
-    ]
-  }
-
-  private func registerComponentTrackingInternal(config: [String: Any]) -> String {
-    let trackingId = UUID().uuidString
-    self.componentTrackingRegistry[trackingId] = config
-    return trackingId
-  }
-
-  private func unregisterComponentTrackingInternal(trackingId: String) {
-    self.componentTrackingRegistry.removeValue(forKey: trackingId)
-  }
-
-  private func setScrollStateInternal(scrolling: Bool) {
-    if self.enableScrollDetection {
-      self.isScrolling = scrolling
-      if scrolling {
-        self.recordActivity()
-      }
-    }
-  }
-
-  private func isCurrentlyScrollingInternal() -> Bool {
-    return self.isScrolling
-  }
-
-
-  // MARK: - Parsely Analytics Helper Methods
 
 }

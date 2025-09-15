@@ -5,8 +5,6 @@
   "scripts": {
     "ios": "bun dev:watchman-del && yes | expo run:ios",
     "android": "bun dev:watchman-del && expo run:android",
-    "ios:refresh": "bun --cwd .. build:plugin && bun run expo:prebuild-clean-ios && bun run ios:pod-install && bun run ios",
-    "android:refresh": "bun --cwd .. build:plugin && bun run expo:prebuild-clean-android && bun run android",
     "start": "expo start",
     "lint": "eslint . --config ../eslint.config.js --ext .ts,.tsx,.js,.jsx",
     "android:reset": "rm -rf node_modules bun.lock && bun install && bun run expo:prebuild-clean-android",
@@ -26,7 +24,6 @@
     "expo:prebuild-clean-android": "yes | bunx expo prebuild --clean -p android"
   },
   "dependencies": {
-    "@expo/config-plugins": "~9.0.0",
     "@expo/vector-icons": "^14.0.2",
     "@react-navigation/native": "^7.0.0",
     "expo": "~52.0.0",

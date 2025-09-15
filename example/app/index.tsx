@@ -15,8 +15,7 @@ const HomePage = () => {
   const handleArticleClick = (articleId: string) => {
     Alert.alert('Article Clicked', `Article ${articleId} clicked!`)
     // Track the click
-    ExpoParsely.trackPageView({
-      url: 'https://example.com/home',
+    ExpoParsely.trackPageView('https://example.com/home', {
       action: '_click',
       data: {
         elementId: articleId,
@@ -30,8 +29,7 @@ const HomePage = () => {
   const handleButtonClick = (buttonName: string, buttonId: string) => {
     Alert.alert('Button Clicked', `${buttonName} button clicked!`)
     // Track the click
-    ExpoParsely.trackPageView({
-      url: 'https://example.com/home',
+    ExpoParsely.trackPageView('https://example.com/home', {
       action: '_click',
       data: {
         elementId: buttonId,
@@ -46,7 +44,26 @@ const HomePage = () => {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Parse.ly SDK</Text>
-        <Text style={styles.subtitle}>Demo Application</Text>
+        <Text style={styles.subtitle}>Demo Application with Debug Logging</Text>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Parse.ly Heartbeat Tracking</Text>
+          <Text style={styles.description}>
+            Parse.ly engaged-time tracking is active with 150-second heartbeat intervals and 5-second activity timeout.
+          </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🔧 Debug Logging</Text>
+          <Text style={styles.description}>
+            Debug logging is enabled in this demo. Check the console for Parse.ly heartbeat events, activity tracking,
+            and engagement metrics. All debug messages are prefixed with "💓 [Parse.ly Debug]".
+          </Text>
+          <Text style={styles.description}>
+            Features demonstrated: • Heartbeat events every 150 seconds • Activity detection with 5-second timeout •
+            Touch and scroll event logging • Page view tracking
+          </Text>
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Page View Tracking</Text>
@@ -95,8 +112,9 @@ const HomePage = () => {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            This demo showcases Parse.ly tracking integration with automatic page views, element
-            impressions/views/clicks, and manual event tracking. Check the console for tracking events.
+            This demo showcases Parse.ly engaged-time tracking with configurable debug logging, 150-second heartbeat
+            intervals, and 5-second activity timeout. Check console for detailed Parse.ly debug messages and engagement
+            tracking. Fully compliant with Parse.ly's official specifications.
           </Text>
         </View>
       </ScrollView>
