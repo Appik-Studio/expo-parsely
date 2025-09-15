@@ -1,8 +1,7 @@
-import ExpoParsely, { ParselyProvider } from 'expo-parsely'
+import { ParselyProvider } from 'expo-parsely'
+import HeartbeatDebugOverlay from 'expo-parsely/components/HeartbeatDebugOverlay'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import HeartbeatDebugOverlay from 'expo-parsely/components/HeartbeatDebugOverlay'
-import { HeartbeatTouchBoundary } from 'expo-parsely/components/HeartbeatTouchBoundary'
 
 const RootLayout = () => {
   return (
@@ -24,27 +23,12 @@ const RootLayout = () => {
         touchThrottleMs: 500,
         scrollThrottleMs: 1000,
         scrollThreshold: 5.0
-      }}
-      navigationTracking={{
-        enabled: true,
-        trackPageViews: true,
-        trackScreens: true,
-        urlPrefix: 'https://example-app.com'
       }}>
-      <HeartbeatTouchBoundary
-        onTouchActivity={() => {
-          // Record activity for heartbeat tracking
-          ExpoParsely.recordActivity()
-          if (__DEV__) {
-            console.log('🎯 [RootLayout] Touch activity detected and recorded')
-          }
-        }}>
-        <StatusBar style='auto' />
-        <HeartbeatDebugOverlay />
-        <Stack>
-          <Stack.Screen name='index' options={{ title: 'Parse.ly SDK' }} />
-        </Stack>
-      </HeartbeatTouchBoundary>
+      <StatusBar style='auto' />
+      <HeartbeatDebugOverlay />
+      <Stack>
+        <Stack.Screen name='index' options={{ title: 'Parse.ly SDK' }} />
+      </Stack>
     </ParselyProvider>
   )
 }

@@ -7,24 +7,22 @@ import type {
   HeartbeatStatus,
   ParselyMetadata,
   ParselyVideoMetadata,
-  TrackingHierarchyConfig
+  TrackEngagementParams,
+  TrackingHierarchyConfig,
+  TrackPageViewParams
 } from './ExpoParsely.types'
 
 interface NativeModule {
   init(siteId: string, flushInterval?: number, dryRun?: boolean): void
 
-  trackPageView(
-    url: string,
-    urlRef?: string,
-    metadata?: ParselyMetadata,
-    extraData?: ExtraData,
-    siteId?: string
-  ): void
+  // Page View Tracking
+  trackPageView(params: TrackPageViewParams): void
 
-  startEngagement(url: string, urlRef?: string, extraData?: ExtraData, siteId?: string): void
-
+  // Engagement Tracking
+  startEngagement(params: TrackEngagementParams): void
   stopEngagement(): void
 
+  // Video Tracking
   trackPlay(
     url: string,
     videoMetadata: ParselyVideoMetadata,
@@ -32,34 +30,23 @@ interface NativeModule {
     extraData?: ExtraData,
     siteId?: string
   ): void
-
   trackPause(): void
-
   resetVideo(): void
 
   // Enhanced Heartbeat and Activity Detection
   configureHeartbeat(config: HeartbeatConfig): void
-
   configureActivityDetection(config: ActivityDetectionConfig): void
-
   recordActivity(): void
-
   getHeartbeatStatus(): HeartbeatStatus
-
   startHeartbeatTracking(): void
-
   stopHeartbeatTracking(): void
 
-  // Element and Component Tracking
-  trackElement(action: string, elementType: string, elementId: string, location: string): void
-
+  // Component Tracking
   registerComponentTracking(config: TrackingHierarchyConfig): string
-
   unregisterComponentTracking(trackingId: string): void
 
   // Scroll and Touch Detection
   setScrollState(isScrolling: boolean): void
-
   isCurrentlyScrolling(): boolean
 }
 
@@ -70,23 +57,58 @@ class ExpoParsely {
     nativeModule.init(siteId, options?.flushInterval, options?.dryRun)
   }
 
+  // Page View Tracking - New unified interface
+  static trackPageView(params: TrackPageViewParams): void
   static trackPageView(
     url: string,
     urlRef?: string,
     metadata?: ParselyMetadata,
     extraData?: ExtraData,
     siteId?: string
+  ): void
+  static trackPageView(
+    urlOrParams: string | TrackPageViewParams,
+    urlRef?: string,
+    metadata?: ParselyMetadata,
+    extraData?: ExtraData,
+    siteId?: string
   ): void {
-    nativeModule.trackPageView(url, urlRef, metadata, extraData, siteId)
+    if (typeof urlOrParams === 'string') {
+      // Legacy support
+      nativeModule.trackPageView({
+        url: urlOrParams,
+        urlRef,
+        metadata: metadata as any,
+        extraData,
+        siteId
+      })
+    } else {
+      // New unified interface
+      nativeModule.trackPageView(urlOrParams)
+    }
   }
 
+  // Engagement Tracking - New unified interface
+  static startEngagement(params: TrackEngagementParams): void
+  static startEngagement(url: string, urlRef?: string, extraData?: ExtraData, siteId?: string): void
   static startEngagement(
-    url: string,
+    urlOrParams: string | TrackEngagementParams,
     urlRef?: string,
     extraData?: ExtraData,
     siteId?: string
   ): void {
-    nativeModule.startEngagement(url, urlRef, extraData, siteId)
+    if (typeof urlOrParams === 'string') {
+      // Legacy support
+      nativeModule.startEngagement({
+        url: urlOrParams,
+        urlRef,
+        extraData,
+        siteId
+      })
+    } else {
+      // New unified interface
+      nativeModule.startEngagement(urlOrParams)
+    }
   }
 
   static stopEngagement(): void {
@@ -137,16 +159,7 @@ class ExpoParsely {
     nativeModule.stopHeartbeatTracking()
   }
 
-  // Element and Component Tracking Methods
-  static trackElement(
-    action: string,
-    elementType: string,
-    elementId: string,
-    location: string
-  ): void {
-    nativeModule.trackElement(action, elementType, elementId, location)
-  }
-
+  // Component Tracking Methods
   static registerComponentTracking(config: TrackingHierarchyConfig): string {
     return nativeModule.registerComponentTracking(config)
   }

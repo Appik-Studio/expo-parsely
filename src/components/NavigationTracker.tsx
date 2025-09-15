@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-import { useTrackingContext } from '../contexts/TrackingContext'
+import { useTrackingContext } from '..'
 
 interface NavigationTrackerProps {
   /** Current navigation path */
@@ -24,7 +24,7 @@ export const NavigationTracker = ({
   onNavigation,
   debounceMs = 1000
 }: NavigationTrackerProps) => {
-  const { recordActivity, trackScreen } = useTrackingContext()
+  const { recordActivity, recordHeartbeatActivity, trackPageView } = useTrackingContext()
   const previousPath = useRef<string>('')
   const lastNavigationTime = useRef<number>(0)
 
@@ -37,11 +37,12 @@ export const NavigationTracker = ({
 
       if (shouldRecordActivity) {
         const timeSinceLastNav = now - lastNavigationTime.current
-        recordActivity()
+        // Only reset heartbeat timer for navigation - Parse.ly activity is handled by touch events
+        recordHeartbeatActivity?.()
         lastNavigationTime.current = now
 
         if (enableDebugLogging) {
-          console.log('Navigation activity recorded:', {
+          console.log('Navigation detected - heartbeat timer reset:', {
             from: previousPath.current || 'initial',
             timeSinceLastNav: timeSinceLastNav + 'ms',
             to: currentPath
@@ -54,8 +55,8 @@ export const NavigationTracker = ({
         })
       }
 
-      // Track screen change
-      trackScreen({
+      // Track page view change
+      trackPageView({
         title: currentPath.split('/').pop() || 'Screen',
         url: currentPath.startsWith('/') ? currentPath : '/' + currentPath,
         navigation: {
@@ -77,7 +78,7 @@ export const NavigationTracker = ({
     }
 
     previousPath.current = currentPath
-  }, [navigationPath, recordActivity, trackScreen, onNavigation, debounceMs, enableDebugLogging])
+  }, [navigationPath, recordHeartbeatActivity, trackPageView, onNavigation, debounceMs, enableDebugLogging])
 
   useEffect(() => {
     if (enableDebugLogging) {

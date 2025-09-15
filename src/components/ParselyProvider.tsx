@@ -1,10 +1,11 @@
-import React from 'react'
+import { ReactNode, useCallback } from 'react'
 
-import { TrackingProvider } from '../contexts/TrackingContext'
-import { useNavigationTracking } from '../hooks/useNavigationTracking'
+import ExpoParsely from '../ExpoParselyModule'
+import { TrackingProvider, useReanimatedHeartbeat } from '../index'
+import { HeartbeatTouchBoundary } from './HeartbeatTouchBoundary'
 
 interface ParselyProviderProps {
-  children: React.ReactNode
+  children: ReactNode
   /** Site ID for Parse.ly */
   siteId?: string
   /** Whether to auto-initialize Parse.ly SDK */
@@ -28,16 +29,40 @@ interface ParselyProviderProps {
     scrollThrottleMs?: number
     scrollThreshold?: number
   }
-  /** Navigation tracking configuration */
-  navigationTracking?: {
-    enabled?: boolean
-    trackPageViews?: boolean
-    trackScreens?: boolean
-    urlPrefix?: string
-    screenNameFormatter?: (pathname: string, params?: Record<string, any>) => string
-  }
   /** Whether to enable debug logging */
   enableDebugLogging?: boolean
+}
+
+// Hook to get heartbeat recordActivity function
+const useHeartbeatActivity = (heartbeatConfig?: ParselyProviderProps['heartbeatConfig']) => {
+  const { recordActivity: heartbeatRecordActivity } = useReanimatedHeartbeat(heartbeatConfig)
+  return heartbeatRecordActivity
+}
+
+// Internal component that uses useReanimatedHeartbeat hook
+const HeartbeatWrapper: React.FC<{
+  children: ReactNode
+  heartbeatConfig?: ParselyProviderProps['heartbeatConfig']
+  enableDebugLogging?: boolean
+  onHeartbeatActivity?: () => void
+}> = ({ children, heartbeatConfig, enableDebugLogging, onHeartbeatActivity }) => {
+  const handleTouchActivity = useCallback(() => {
+    // Record activity for Parse.ly native module
+    ExpoParsely.recordActivity()
+
+    // Reset heartbeat timer
+    onHeartbeatActivity?.()
+
+    if (__DEV__ && enableDebugLogging) {
+      console.log('🎯 [ParselyProvider] Touch activity detected - recorded in Parse.ly and reset heartbeat timer')
+    }
+  }, [onHeartbeatActivity, enableDebugLogging])
+
+  return (
+    <HeartbeatTouchBoundary onTouchActivity={handleTouchActivity} onHeartbeatActivity={onHeartbeatActivity}>
+      {children}
+    </HeartbeatTouchBoundary>
+  )
 }
 
 /**
@@ -63,13 +88,25 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
     scrollThrottleMs: 1000,
     scrollThreshold: 5
   },
-  navigationTracking = {
-    enabled: true,
-    trackPageViews: true,
-    trackScreens: true
-  },
   enableDebugLogging = false
 }) => {
+  // Conditionally wrap with HeartbeatTouchBoundary if heartbeats are enabled
+  const enableHeartbeats = heartbeatConfig?.enableHeartbeats ?? true
+
+  // Get heartbeat recordActivity function
+  const heartbeatRecordActivity = useHeartbeatActivity(heartbeatConfig)
+
+  const content = enableHeartbeats ? (
+    <HeartbeatWrapper
+      heartbeatConfig={heartbeatConfig}
+      enableDebugLogging={enableDebugLogging}
+      onHeartbeatActivity={heartbeatRecordActivity}>
+      {children}
+    </HeartbeatWrapper>
+  ) : (
+    <>{children}</>
+  )
+
   return (
     <TrackingProvider
       autoInitialize={autoInitialize}
@@ -78,29 +115,11 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
       dryRun={dryRun}
       heartbeatConfig={heartbeatConfig}
       activityDetectionConfig={activityDetectionConfig}
-      enableDebugLogging={enableDebugLogging}>
-      <NavigationTrackingWrapper navigationTracking={navigationTracking} debug={enableDebugLogging}>
-        {children}
-      </NavigationTrackingWrapper>
+      enableDebugLogging={enableDebugLogging}
+      recordHeartbeatActivity={heartbeatRecordActivity}>
+      {content}
     </TrackingProvider>
   )
-}
-
-/**
- * Internal component to handle navigation tracking
- */
-const NavigationTrackingWrapper: React.FC<{
-  children: React.ReactNode
-  navigationTracking: ParselyProviderProps['navigationTracking']
-  debug: boolean
-}> = ({ children, navigationTracking, debug }) => {
-  // Use navigation tracking if enabled
-  useNavigationTracking({
-    ...navigationTracking,
-    debug
-  })
-
-  return <>{children}</>
 }
 
 export default ParselyProvider

@@ -5,6 +5,7 @@ const isDev = __DEV__
 
 interface HeartbeatTouchBoundaryProps extends PropsWithChildren {
   onTouchActivity?: () => void
+  onHeartbeatActivity?: () => void // For heartbeat timer reset
 }
 
 let isGloballyScrolling = false
@@ -61,6 +62,7 @@ export class HeartbeatTouchBoundary extends Component<HeartbeatTouchBoundaryProp
 
     isDev && console.log('🎯 [HeartbeatTouchBoundary] Touch start detected - recording activity')
     this.props.onTouchActivity?.()
+    this.props.onHeartbeatActivity?.()
   }
 
   private _onTouchMove = (e: GestureResponderEvent): void => {
@@ -98,6 +100,7 @@ export class HeartbeatTouchBoundary extends Component<HeartbeatTouchBoundaryProp
           `🎯 [HeartbeatTouchBoundary] ${activityType.toUpperCase()} activity detected - recording (throttled)`
         )
       this.props.onTouchActivity?.()
+      this.props.onHeartbeatActivity?.()
       this.lastTouchMoveTime = currentTime
     }
   }

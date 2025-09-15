@@ -19,21 +19,22 @@ Enhanced Expo plugin for Parse.ly Analytics SDK - provides comprehensive engagem
 
 ### Parse.ly SDK Feature Comparison
 
-| Method/Feature | Parse.ly Official | iOS Implementation | Android Implementation | Strategy |
-|---|---|---|---|---|
-| **Core Analytics** |
-| `init`/`configure` | ✅ Available | ✅ **SDK-based** | 🔄 **Production-ready stub** (SDK integration ready) | Progressive enhancement |
-| `trackPageView` | ✅ Available | ✅ **SDK-based** | 🔄 **Production-ready stub** (SDK integration ready) | Progressive enhancement |
-| `startEngagement` | ✅ Available | ✅ **SDK-based** (includes heartbeat) | 🔄 **Production-ready stub** (SDK integration ready) | Progressive enhancement |
-| `stopEngagement` | ✅ Available | ✅ **SDK-based** (includes heartbeat) | 🔄 **Production-ready stub** (SDK integration ready) | Progressive enhancement |
-| **Enhanced Configuration** |
-| `configureHeartbeat` | ❌ Not available | ✅ **Full implementation** | ✅ **Full implementation** | Value-add feature |
-| `configureActivityDetection` | ❌ Not available | ✅ **Full implementation** | ✅ **Full implementation** | Value-add feature |
-| `recordActivity` | ❌ Not available | ✅ **Full implementation** | ✅ **Full implementation** | Value-add feature |
-| **Element Tracking** |
-| `trackElement` | ❌ Not available | ✅ **Full implementation** (custom URL tracking + activity) | ✅ **Full implementation** (custom URL tracking + activity) | Differentiation feature |
+| Method/Feature                 | Parse.ly Official | iOS Implementation                                 | Android Implementation                               | Strategy                |
+| ------------------------------ | ----------------- | -------------------------------------------------- | ---------------------------------------------------- | ----------------------- |
+| **Core Analytics**             |
+| `init`/`configure`             | ✅ Available      | ✅ **SDK-based**                                   | 🔄 **Production-ready stub** (SDK integration ready) | Progressive enhancement |
+| `trackPageView`                | ✅ Available      | ✅ **SDK-based**                                   | 🔄 **Production-ready stub** (SDK integration ready) | Progressive enhancement |
+| `startEngagement`              | ✅ Available      | ✅ **SDK-based** (includes heartbeat)              | 🔄 **Production-ready stub** (SDK integration ready) | Progressive enhancement |
+| `stopEngagement`               | ✅ Available      | ✅ **SDK-based** (includes heartbeat)              | 🔄 **Production-ready stub** (SDK integration ready) | Progressive enhancement |
+| **Enhanced Configuration**     |
+| `configureHeartbeat`           | ❌ Not available  | ✅ **Full implementation**                         | ✅ **Full implementation**                           | Value-add feature       |
+| `configureActivityDetection`   | ❌ Not available  | ✅ **Full implementation**                         | ✅ **Full implementation**                           | Value-add feature       |
+| `recordActivity`               | ❌ Not available  | ✅ **Full implementation**                         | ✅ **Full implementation**                           | Value-add feature       |
+| **Element Tracking**           |
+| `trackPageView` (with actions) | ❌ Not available  | ✅ **Full implementation** (custom actions & data) | ✅ **Full implementation** (custom actions & data)   | Generic event tracking  |
 
 ### Legend
+
 - ✅ **Full Implementation** - Feature completely implemented and functional
 - ⚠️ **Fallback/Partial** - Basic functionality with fallback behavior
 - 🔄 **In Progress** - Stub implementation, full feature planned
@@ -66,11 +67,12 @@ Then install the package:
 npm install @appik-studio/expo-parsely
 # or
 yarn add @appik-studio/expo-parsely
-# or  
+# or
 bun add @appik-studio/expo-parsely
 ```
 
 ### Authentication (if private repo)
+
 If the repository is private, you'll need to authenticate:
 
 ```bash
@@ -99,9 +101,9 @@ Add the plugin to your `app.json` or `app.config.js`:
 
 ### Configuration Options
 
-| Option | Type | Required | Default | Description |
-|--------|------|----------|---------|-------------|
-| `siteId` | string | ✅ | - | Your Parse.ly site identifier |
+| Option   | Type   | Required | Default | Description                   |
+| -------- | ------ | -------- | ------- | ----------------------------- |
+| `siteId` | string | ✅       | -       | Your Parse.ly site identifier |
 
 ## 📖 Usage
 
@@ -227,24 +229,32 @@ function MyComponent() {
 }
 ```
 
-### Trackable Components
+### Manual Element Tracking
+
+For custom element tracking, use standard React Native components with `trackPageView`:
 
 ```typescript
-import { TrackableTouchable } from '@appik-studio/expo-parsely'
+import { TouchableOpacity, Text } from 'react-native'
+import ExpoParsely from 'expo-parsely'
 
 function MyScreen() {
+  const handleButtonPress = () => {
+    ExpoParsely.trackPageView({
+      url: window.location.href,
+      action: '_click',
+      data: {
+        elementId: 'header-cta-button',
+        elementType: 'button',
+        elementLocation: 'header'
+      }
+    })
+    ExpoParsely.recordActivity()
+  }
+
   return (
-    <TrackableTouchable
-      trackingId="header-cta-button"
-      componentName="CTAButton"
-      elementType="button"
-      trackImpressions={true}
-      trackViews={true}
-      viewThreshold={1000} // Track view after 1 second
-      onPress={() => console.log('Button pressed')}
-    >
+    <TouchableOpacity onPress={handleButtonPress}>
       <Text>Call to Action</Text>
-    </TrackableTouchable>
+    </TouchableOpacity>
   )
 }
 ```
@@ -261,7 +271,7 @@ function MyApp() {
     <View style={{ flex: 1 }}>
       {/* Your app content */}
       <YourAppContent />
-      
+
       {/* Debug overlay - only shows in development */}
       <HeartbeatDebugOverlay />
     </View>
@@ -270,59 +280,12 @@ function MyApp() {
 ```
 
 **Features:**
+
 - 💓 **Toggle Button** - Red heart in top-right corner to show/hide overlay
 - 📊 **Real-time Stats** - Live tracking of activities, heartbeats, session duration
 - 🔄 **Reset Button** - Clear debug counters
 - 🎯 **Development Only** - Automatically hidden in production builds
 - 📱 **Scroll Detection** - Shows current scroll state in real-time
-
-### Element Tracking
-
-```typescript
-import { useElementTracking } from '@appik-studio/expo-parsely'
-
-function TrackedComponent() {
-  const { trackElement, trackingId } = useElementTracking({
-    elementId: 'product-card',
-    elementType: 'card',
-    trackImpressions: true,
-    trackViews: true,
-    viewThreshold: 500
-  })
-
-  const handleProductClick = () => {
-    trackElement('click', 'card', 'product-card', '/shop/products')
-  }
-
-  return (
-    <TouchableOpacity onPress={handleProductClick}>
-      <Text>Product Card</Text>
-    </TouchableOpacity>
-  )
-}
-```
-
-### Component Hierarchy Tracking
-
-```typescript
-import { useTrackingHierarchy } from '@appik-studio/expo-parsely'
-
-function MyComponent({ children }) {
-  const trackingId = useTrackingHierarchy({
-    componentName: 'ProductList',
-    testID: 'product-list',
-    accessibilityLabel: 'List of products',
-    props: { itemCount: 10, category: 'electronics' }
-  })
-
-  return (
-    <View testID="product-list">
-      {children}
-    </View>
-  )
-}
-```
-
 
 ### Activity Detection Configuration
 
@@ -372,36 +335,24 @@ Main class for Parse.ly SDK operations.
 - `startEngagement(url: string, urlRef?: string, extraData?: ExtraData, siteId?: string): void` - Start engagement tracking (includes automatic heartbeat monitoring)
 - `stopEngagement(): void` - Stop engagement tracking (includes automatic heartbeat cleanup)
 
-
 #### Enhanced Methods
 
-- `configureHeartbeat(config: HeartbeatConfig): void` - Configure heartbeat settings  
+- `configureHeartbeat(config: HeartbeatConfig): void` - Configure heartbeat settings
 - `configureActivityDetection(config: ActivityDetectionConfig): void` - Configure activity detection
 - `recordActivity(): void` - Record user activity manually
 
-#### Element Tracking Methods  
+#### Element Tracking Methods
 
-- `trackElement(action: string, elementType: string, elementId: string, location: string): void` - Track element interactions
+- `trackPageView(params: TrackPageViewParams): void` - Track page views with custom actions and data
 
 ### Components
-
-#### TrackableTouchable
-
-Enhanced TouchableOpacity with automatic tracking capabilities.
-
-**Props:**
-- `trackingId?: string` - Unique identifier for tracking
-- `componentName?: string` - Component name for hierarchy tracking
-- `elementType?: string` - Element type for analytics classification
-- `trackImpressions?: boolean` - Track impressions when mounted
-- `trackViews?: boolean` - Track views when visible
-- `viewThreshold?: number` - Time threshold for "viewed" (ms)
 
 #### ParselyProvider
 
 Comprehensive provider component that automatically handles Parse.ly initialization, heartbeat tracking, activity detection, and navigation tracking.
 
 **Props:**
+
 - `siteId?: string` - Your Parse.ly site identifier
 - `autoInitialize?: boolean` - Whether to auto-initialize the SDK (default: true)
 - `flushInterval?: number` - Flush interval in seconds (default: 150)
@@ -409,9 +360,9 @@ Comprehensive provider component that automatically handles Parse.ly initializat
 - `enableDebugLogging?: boolean` - Enable debug logging (default: false)
 - `heartbeatConfig?: HeartbeatConfig` - Heartbeat configuration
 - `activityDetectionConfig?: ActivityDetectionConfig` - Activity detection configuration
-- `navigationTracking?: NavigationTrackingConfig` - Navigation tracking configuration
 
 **Usage:**
+
 ```typescript
 import { ParselyProvider } from '@appik-studio/expo-parsely'
 
@@ -425,11 +376,6 @@ export default function App() {
         intervalMs: 10000,
         maxDurationMs: 7200000
       }}
-      navigationTracking={{
-        enabled: true,
-        trackPageViews: true,
-        trackScreens: true
-      }}
     >
       {/* Your app content */}
     </ParselyProvider>
@@ -442,6 +388,7 @@ export default function App() {
 Development overlay for real-time heartbeat and activity monitoring.
 
 **Usage:**
+
 ```typescript
 import { HeartbeatDebugOverlay } from '@appik-studio/expo-parsely'
 
@@ -450,6 +397,7 @@ import { HeartbeatDebugOverlay } from '@appik-studio/expo-parsely'
 ```
 
 **Features:**
+
 - Auto-hidden in production (`__DEV__` check)
 - Toggle button with heart emoji (💓)
 - Real-time stats display
@@ -463,189 +411,78 @@ import { HeartbeatDebugOverlay } from '@appik-studio/expo-parsely'
 Hook for managing heartbeat tracking.
 
 **Returns:**
+
 - `status: HeartbeatStatus` - Current heartbeat status
 - `recordActivity: () => void` - Record activity manually
 - `startTracking: () => void` - Start heartbeat tracking
 - `stopTracking: () => void` - Stop heartbeat tracking
 - `isActive: boolean` - Whether tracking is active
 
-#### useElementTracking(config: ElementTrackingConfig)
-
-Hook for element-specific tracking.
-
-**Returns:**
-- `trackElement: (action: string, elementType: string, elementId: string, location: string) => void`
-- `trackingId: string` - Generated tracking ID
-
-#### useTrackingHierarchy(config: TrackingHierarchyConfig)
-
-Hook for component hierarchy tracking.
-
-**Returns:**
-- `trackingId: string` - Generated tracking ID for the component
-
-#### useNavigationTracking(options?: NavigationTrackingOptions)
-
-Hook for automatic navigation tracking with Expo Router. Automatically tracks page views and screen changes when navigation occurs.
-
-**Options:**
-- `enabled?: boolean` - Whether to enable navigation tracking (default: true)
-- `trackPageViews?: boolean` - Whether to track page views (default: true)
-- `trackScreens?: boolean` - Whether to track screen changes (default: true)
-- `urlPrefix?: string` - URL prefix for page views (default: 'https://app')
-- `screenNameFormatter?: (pathname, params) => string` - Custom screen name formatter
-- `debug?: boolean` - Enable debug logging (default: false)
-
-**Usage:**
-```typescript
-import { useNavigationTracking } from '@appik-studio/expo-parsely'
-
-function AppLayout() {
-  useNavigationTracking({
-    enabled: true,
-    trackPageViews: true,
-    trackScreens: true,
-    debug: __DEV__
-  });
-
-  return <YourAppContent />;
-}
-```
-
-Let me search for `trackPageViews` and `trackScreens` in your codebase to understand how they're implemented and their differences:
-
-[5 tools called]
-
-Based on your codebase, here's the difference between `trackPageViews` and `trackScreens`:
-
-## **`trackScreen`** (Higher-level abstraction)
-- **Location**: `useMobileAnalytics.ts`
-- **Purpose**: Mobile-specific screen tracking wrapper
-- **Implementation**: Calls `ExpoParsely.trackPageView()` internally
-- **Usage**: Used for React Native screen navigation tracking
-
-```typescript
-const trackScreen = useCallback((context?: Partial<AnalyticsContext>) => {
-  if (context?.url) {
-    ExpoParsely.trackPageView(context.url, undefined, {
-      section: context.title || 'Unknown',
-      title: context.title || ''
-    })
-  }
-}, [])
-```
-
-## **`trackPageView`** (Lower-level Parse.ly SDK method)
-- **Location**: Parse.ly native SDK (`ExpoParsely.trackPageView()`)
-- **Purpose**: Direct Parse.ly analytics tracking
-- **Implementation**: Native Parse.ly SDK call
-- **Usage**: Lower-level API for page view events
-
-## **Key Differences:**
-
-| Aspect | `trackScreen` | `trackPageView` |
-|--------|---------------|-----------------|
-| **Level** | High-level wrapper | Low-level SDK method |
-| **Context** | Mobile screens/navigation | Web pages/content |
-| **Usage** | React Native app screens | Direct Parse.ly tracking |
-| **Parameters** | Takes `AnalyticsContext` object | Direct Parse.ly parameters |
-| **Implementation** | Calls `trackPageView` internally | Native SDK call |
-
-## **Additional Context:**
-
-You also have a **`trackPage`** function in your analytics service (`services/analytics/index.ts`) which is used for the general analytics system (Piano Analytics + Parse.ly) and handles both Piano and Parse.ly tracking through plugins.
-
-**Usage Pattern:**
-- Use `trackScreen` for mobile app screen changes
-- Use `trackPage` for general page tracking through your analytics service
-- `trackPageView` is called automatically by these higher-level functions
-
-#### withNavigationTracking(Component, options)
-
-Higher-order component that automatically wraps a screen component with navigation tracking.
-
-**Usage:**
-```typescript
-import { withNavigationTracking } from '@appik-studio/expo-parsely'
-
-const TrackedScreen = withNavigationTracking(YourScreenComponent, {
-  trackPageViews: true,
-  debug: __DEV__
-});
-```
-
 #### useHeartbeatDebug()
 
 Hook for accessing heartbeat debug information. Used internally by HeartbeatDebugOverlay.
 
 **Returns:**
+
 - `stats: HeartbeatDebugStats` - Current debug statistics
 - `resetStats: () => void` - Reset debug counters
 
 ### Types
 
-```typescript
+````typescript
 interface ParselyMetadata {
-  canonical_url?: string;
-  pub_date?: Date | number;
-  title?: string;
-  authors?: string[];
-  image_url?: string;
-  section?: string;
-  tags?: string[];
-  duration?: number;
+  canonical_url?: string
+  pub_date?: Date | number
+  title?: string
+  authors?: string[]
+  image_url?: string
+  section?: string
+  tags?: string[]
+  duration?: number
 }
 
-
 interface HeartbeatConfig {
-  enableHeartbeats?: boolean;
-  inactivityThresholdMs?: number;
-  intervalMs?: number;
-  maxDurationMs?: number;
+  enableHeartbeats?: boolean
+  inactivityThresholdMs?: number
+  intervalMs?: number
+  maxDurationMs?: number
 }
 
 interface ActivityDetectionConfig {
-  enableTouchDetection?: boolean;
-  enableScrollDetection?: boolean;
-  touchThrottleMs?: number;
-  scrollThrottleMs?: number;
-  scrollThreshold?: number;
+  enableTouchDetection?: boolean
+  enableScrollDetection?: boolean
+  touchThrottleMs?: number
+  scrollThrottleMs?: number
+  scrollThreshold?: number
 }
 
 interface HeartbeatStatus {
-  isActive: boolean;
-  lastActivity: number;
-  sessionDuration: number;
-  totalActivities: number;
-  totalHeartbeats: number;
+  isActive: boolean
+  lastActivity: number
+  sessionDuration: number
+  totalActivities: number
+  totalHeartbeats: number
 }
 
 interface TrackingHierarchyConfig {
-  componentName?: string;
-  testID?: string;
-  accessibilityLabel?: string;
-  trackingId?: string;
-  props?: Record<string, any>;
+  componentName?: string
+  testID?: string
+  accessibilityLabel?: string
+  trackingId?: string
+  props?: Record<string, any>
 }
 
-interface NavigationTrackingOptions {
-  enabled?: boolean;
-  trackPageViews?: boolean;
-  trackScreens?: boolean;
-  urlPrefix?: string;
-  screenNameFormatter?: (pathname: string, params?: Record<string, any>) => string;
-  debug?: boolean;
-}
-```
 
 ## 🛠 Platform Requirements
 
 ### iOS
+
 - iOS 12.0+
 - Xcode 12+
 - Swift 5.0+
 
 ### Android
+
 - Android API 21+
 - Kotlin support
 - AndroidX
@@ -699,7 +536,7 @@ bun run ios:refresh
 
 # Refresh Android build
 bun run android:refresh
-```
+````
 
 ### Testing Local Changes
 

@@ -15,17 +15,17 @@ class ExpoParselyModule : Module() {
   private var isHeartbeatActive = false
   private var heartbeatHandler: Handler? = null
   private var heartbeatRunnable: Runnable? = null
-  private var heartbeatIntervalMs: Long = 150000 // Parse.ly default: 150s (2.5 minutes)
-  private var inactivityThresholdMs: Long = 5000 // Parse.ly default: 5s (activeTimeout)
-  private var maxDurationMs: Long = 3600000 // 1 hour max session
+  private var heartbeatIntervalMs: Long = 15000 // Default: 15 seconds
+  private var inactivityThresholdMs: Long = 5000 // Default: 5 seconds
+  private var maxDurationMs: Long = 3600000 // Default: 1 hour
   private var lastActivityTime: Long = System.currentTimeMillis()
   private var sessionStartTime: Long = System.currentTimeMillis()
   private var totalActivities: Long = 0
   private var totalHeartbeats: Long = 0
   private var isScrolling = false
 
-  // Activity detection config - aligned with Parse.ly methodology
-  private var enableTouchDetection = true
+  // Activity detection config - handled by HeartbeatTouchBoundary component
+  private var enableTouchDetection = true // Detects touch/tap events (mousedown equivalent)
   private var enableScrollDetection = true // Parse.ly: scroll events are engagement
   private var touchThrottleMs: Long = 500
   private var scrollThrottleMs: Long = 2000
@@ -52,22 +52,54 @@ class ExpoParselyModule : Module() {
       }
     }
 
-    Function("trackPageView") { url: String, urlRef: String?, metadata: Map<String, Any>?, extraData: Map<String, Any>?, siteId: String? ->
+    Function("trackPageView") { params: Map<String, Any> ->
       try {
+        val url = params["url"] as? String ?: run {
+          println("ExpoParsely: Missing URL in params: $params")
+          return@Function
+        }
+
+        val urlRef = params["urlRef"] as? String ?: ""
+        val siteId = params["siteId"] as? String ?: ""
+        val metadata = params["metadata"] as? Map<String, Any>
+        val extraData = params["extraData"] as? Map<String, Any>
+        val action = params["action"] as? String
+        val customData = params["data"] as? Map<String, Any>
+
+        // Merge custom data with extraData for Parse.ly
+        val finalExtraData = mutableMapOf<String, Any>()
+        extraData?.let { finalExtraData.putAll(it) }
+        customData?.let { finalExtraData.putAll(it) }
+
         // TODO: Replace with actual Parsely SDK call when available:
-        // ParselyTracker.sharedInstance.trackURL(url, urlRef)
-        println("ExpoParsely trackPageView: url=$url, urlRef=$urlRef")
+        // if (action != null) {
+        //     ParselyTracker.sharedInstance.trackURL(url, urlRef, finalExtraData, siteId, action)
+        // } else {
+        //     ParselyTracker.sharedInstance.trackURL(url, urlRef, finalExtraData, siteId)
+        // }
+        println("ExpoParsely trackPageView: url=$url, urlRef=$urlRef, action=$action, metadata=$metadata")
+
         recordActivity()
       } catch (e: Exception) {
         println("ExpoParsely trackPageView error: ${e.message}")
       }
     }
 
-    Function("startEngagement") { url: String, urlRef: String?, extraData: Map<String, Any>?, siteId: String? ->
+    Function("startEngagement") { params: Map<String, Any> ->
       try {
+        val url = params["url"] as? String ?: run {
+          println("ExpoParsely: Missing URL in params: $params")
+          return@Function
+        }
+
+        val urlRef = params["urlRef"] as? String ?: ""
+        val siteId = params["siteId"] as? String ?: ""
+        val extraData = params["extraData"] as? Map<String, Any>
+
         // TODO: Replace with actual Parsely SDK call when available:
-        // ParselyTracker.sharedInstance.startEngagement(url, urlRef)
+        // ParselyTracker.sharedInstance.startEngagement(url, urlRef, extraData, siteId)
         println("ExpoParsely startEngagement: url=$url, urlRef=$urlRef")
+
         recordActivity()
         startHeartbeatTrackingInternal()
       } catch (e: Exception) {
@@ -126,17 +158,9 @@ class ExpoParselyModule : Module() {
     }
 
 
-    // Element and Component Tracking Implementation
-    Function("trackElement") { action: String, elementType: String, elementId: String, location: String ->
-      try {
-        // TODO: Replace with actual Parsely SDK call when available:
-        // ParselyTracker.sharedInstance.trackURL(customUrl)
-        println("ExpoParsely trackElement: $action on $elementType#$elementId at $location")
-        recordActivity() // Record this as user activity
-      } catch (e: Exception) {
-        println("ExpoParsely trackElement error: ${e.message}")
-      }
-    }
+
+
+
 
     // Video tracking methods
     Function("trackPlay") { url: String, videoMetadata: Map<String, Any>, urlRef: String?, extraData: Map<String, Any>?, siteId: String? ->
@@ -272,4 +296,8 @@ class ExpoParselyModule : Module() {
     val context = requireNotNull(appContext.reactContext)
     return context.getSharedPreferences("expo_parsely_preferences", Context.MODE_PRIVATE)
   }
+
+
+  // MARK: - Parsely Analytics Helper Methods
+
 }

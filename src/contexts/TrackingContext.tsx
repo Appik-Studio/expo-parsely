@@ -1,42 +1,17 @@
-import React, { createContext, PropsWithChildren, useCallback, useContext, useEffect, useRef } from 'react'
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useRef } from 'react'
 
 import ExpoParsely from '../ExpoParselyModule'
+import { isDev } from '../constants'
 
-interface ComponentInfo {
-  componentName: string
-  testID?: string
-  accessibilityLabel?: string
-  trackingId?: string
-  props?: Record<string, any>
-}
-
-interface HierarchyData {
-  componentNames: string[]
-  testIDs: string[]
-  trackingIds: string[]
-  sameTagIndexes: number[]
-}
-
+// Tracking Context for overall app tracking
 interface TrackingContextValue {
-  /** Record user activity for heartbeat tracking */
+  trackPageView: (context?: Partial<Record<string, any>>) => void
   recordActivity: () => void
-  /** Track link clicks with hierarchy context */
-  trackLinkClick: (href: string, text?: string) => void
-  /** Track screen changes */
-  trackScreen: (context?: Record<string, any>) => void
-  /** Register a component in the tracking hierarchy */
-  registerComponent: (info: ComponentInfo) => () => void
-  /** Get current component hierarchy data */
-  getHierarchy: () => HierarchyData
-  /** Get current hierarchy depth */
-  getCurrentDepth: () => number
-  /** Set scroll state for activity detection */
-  setScrollState: (isScrolling: boolean) => void
-  /** Get current scroll state */
-  isScrolling: () => boolean
+  recordHeartbeatActivity?: () => void // For heartbeat timer reset
+  isActive: boolean
 }
 
-export const TrackingContext = createContext<TrackingContextValue | null>(null)
+const TrackingContext = createContext<TrackingContextValue | null>(null)
 
 export const useTrackingContext = () => {
   const context = useContext(TrackingContext)
@@ -47,26 +22,16 @@ export const useTrackingContext = () => {
 }
 
 interface TrackingProviderProps extends PropsWithChildren {
-  /** Callback when user activity is detected */
-  onActivityDetected?: () => void
-  /** Whether to enable debug logging */
-  enableDebugLogging?: boolean
-  /** Whether to auto-initialize Parse.ly SDK */
   autoInitialize?: boolean
-  /** Site ID for Parse.ly */
   siteId?: string
-  /** Flush interval for Parse.ly */
   flushInterval?: number
-  /** Whether to run in dry-run mode */
   dryRun?: boolean
-  /** Heartbeat configuration */
   heartbeatConfig?: {
     enableHeartbeats?: boolean
     inactivityThresholdMs?: number
     intervalMs?: number
     maxDurationMs?: number
   }
-  /** Activity detection configuration */
   activityDetectionConfig?: {
     enableTouchDetection?: boolean
     enableScrollDetection?: boolean
@@ -74,28 +39,34 @@ interface TrackingProviderProps extends PropsWithChildren {
     scrollThrottleMs?: number
     scrollThreshold?: number
   }
+  enableDebugLogging?: boolean
+  recordHeartbeatActivity?: () => void // Handler for heartbeat timer reset
 }
 
-export const TrackingProvider = ({
+export const TrackingProvider: React.FC<TrackingProviderProps> = ({
   children,
-  onActivityDetected,
-  enableDebugLogging = false,
-  autoInitialize = false,
+  autoInitialize = true,
   siteId,
-  flushInterval,
-  dryRun,
-  heartbeatConfig,
-  activityDetectionConfig
-}: TrackingProviderProps) => {
-  const hierarchyStack = useRef<ComponentInfo[]>([])
+  flushInterval = 150,
+  dryRun = false,
+  heartbeatConfig = {
+    enableHeartbeats: true,
+    inactivityThresholdMs: 30000,
+    intervalMs: 10000,
+    maxDurationMs: 7200000 // 2 hours
+  },
+  activityDetectionConfig = {
+    enableTouchDetection: true,
+    enableScrollDetection: true,
+    touchThrottleMs: 100,
+    scrollThrottleMs: 1000,
+    scrollThreshold: 5
+  },
+  enableDebugLogging = false,
+  recordHeartbeatActivity
+}) => {
+  const isActive = useRef(true)
 
-  useEffect(() => {
-    if (enableDebugLogging) {
-      console.log('🔵 [TrackingProvider] Provider initialized')
-    }
-  }, [enableDebugLogging])
-
-  // Auto-initialize Parse.ly SDK if configured
   useEffect(() => {
     if (autoInitialize && siteId) {
       try {
@@ -104,176 +75,52 @@ export const TrackingProvider = ({
           dryRun
         })
 
-        // Configure heartbeat if provided
-        if (heartbeatConfig) {
-          ExpoParsely.configureHeartbeat(heartbeatConfig)
-        }
-
-        // Configure activity detection if provided
-        if (activityDetectionConfig) {
-          ExpoParsely.configureActivityDetection(activityDetectionConfig)
-        }
-
-        // Start heartbeat tracking automatically
-        ExpoParsely.startHeartbeatTracking()
-
-        if (enableDebugLogging) {
-          console.log('🚀 [TrackingProvider] Parse.ly SDK auto-initialized', {
-            siteId,
-            flushInterval,
-            dryRun,
-            heartbeatConfig,
-            activityDetectionConfig
-          })
+        if (isDev) {
+          console.log('🔵 [TrackingProvider] Parse.ly initialized successfully')
         }
       } catch (error) {
-        console.error('❌ [TrackingProvider] Failed to auto-initialize Parse.ly SDK:', error)
+        console.error('Failed to initialize Parse.ly:', error)
       }
     }
+  }, [autoInitialize, siteId, flushInterval, dryRun, enableDebugLogging])
 
-    // Cleanup function to stop heartbeat tracking
-    return () => {
-      if (autoInitialize) {
-        try {
-          ExpoParsely.stopHeartbeatTracking()
-          if (enableDebugLogging) {
-            console.log('🛑 [TrackingProvider] Heartbeat tracking stopped')
-          }
-        } catch (error) {
-          console.error('❌ [TrackingProvider] Failed to stop heartbeat tracking:', error)
-        }
+  const trackPageView = useCallback((context?: Partial<Record<string, any>>) => {
+    try {
+      if (context?.url) {
+        ExpoParsely.trackPageView(context.url, undefined, {
+          section: context.title || 'Unknown',
+          title: context.title || ''
+        })
       }
+    } catch (error) {
+      if (isDev) console.error('TrackingProvider trackPageView failed:', error)
     }
-  }, [autoInitialize, siteId, flushInterval, dryRun, heartbeatConfig, activityDetectionConfig, enableDebugLogging])
+  }, [])
 
   const recordActivity = useCallback(() => {
-    // Record activity in the native module
-    ExpoParsely.recordActivity()
+    try {
+      ExpoParsely.recordActivity()
 
-    // Call the optional callback
-    onActivityDetected?.()
+      // Also trigger heartbeat timer reset if available
+      recordHeartbeatActivity?.()
 
-    if (enableDebugLogging) {
-      console.log('🎯 [TrackingProvider] Activity recorded')
+      if (isDev) {
+        console.log('🎯 [TrackingProvider] Activity recorded and heartbeat timer reset')
+      }
+    } catch (error) {
+      if (isDev) console.error('Failed to record activity:', error)
     }
-  }, [onActivityDetected, enableDebugLogging])
-
-  const trackLinkClick = useCallback(
-    (href: string, text?: string) => {
-      recordActivity()
-
-      // Track the link click with hierarchy context
-      const hierarchy = getHierarchy()
-      ExpoParsely.trackElement(
-        'click',
-        'link',
-        href,
-        JSON.stringify({
-          text: text || href,
-          hierarchy: hierarchy.trackingIds
-        })
-      )
-
-      if (enableDebugLogging) {
-        console.log('🔗 [TrackingProvider] Link click tracked:', href)
-      }
-    },
-    [recordActivity, enableDebugLogging]
-  )
-
-  const trackScreen = useCallback(
-    (context?: Record<string, any>) => {
-      // Screen tracking doesn't count as activity
-      if (enableDebugLogging) {
-        console.log('📱 [TrackingProvider] Screen tracked:', context)
-      }
-
-      // Could be extended to track screen views
-      // For now, this is a placeholder for screen-specific tracking
-    },
-    [enableDebugLogging]
-  )
-
-  const registerComponent = useCallback(
-    (info: ComponentInfo) => {
-      hierarchyStack.current.push(info)
-
-      if (enableDebugLogging) {
-        console.log('📝 [TrackingProvider] Component registered:', info.componentName)
-      }
-
-      // Return cleanup function
-      return () => {
-        const index = hierarchyStack.current.findIndex(c => c === info)
-        if (index >= 0) {
-          hierarchyStack.current.splice(index, 1)
-          if (enableDebugLogging) {
-            console.log('🗑️ [TrackingProvider] Component unregistered:', info.componentName)
-          }
-        }
-      }
-    },
-    [enableDebugLogging]
-  )
-
-  const getHierarchy = useCallback((): HierarchyData => {
-    const stack = hierarchyStack.current
-    const componentCounts: Record<string, number> = {}
-
-    const hierarchyData: HierarchyData = {
-      componentNames: [],
-      sameTagIndexes: [],
-      testIDs: [],
-      trackingIds: []
-    }
-
-    stack.forEach(component => {
-      // Track component names
-      hierarchyData.componentNames.push(component.componentName)
-
-      // Track testIDs
-      hierarchyData.testIDs.push(component.testID || 'null')
-
-      // Track trackingIds
-      hierarchyData.trackingIds.push(component.trackingId || 'null')
-
-      // Calculate same-tag index
-      componentCounts[component.componentName] = (componentCounts[component.componentName] || 0) + 1
-      hierarchyData.sameTagIndexes.push(componentCounts[component.componentName])
-    })
-
-    return hierarchyData
-  }, [])
-
-  const getCurrentDepth = useCallback(() => hierarchyStack.current.length, [])
-
-  const setScrollState = useCallback(
-    (isScrolling: boolean) => {
-      ExpoParsely.setScrollState(isScrolling)
-
-      if (enableDebugLogging) {
-        console.log('📜 [TrackingProvider] Scroll state set:', isScrolling)
-      }
-    },
-    [enableDebugLogging]
-  )
-
-  const isScrolling = useCallback(() => {
-    return ExpoParsely.isCurrentlyScrolling()
-  }, [])
+  }, [recordHeartbeatActivity])
 
   const value: TrackingContextValue = {
+    trackPageView,
     recordActivity,
-    trackLinkClick,
-    trackScreen,
-    registerComponent,
-    getHierarchy,
-    getCurrentDepth,
-    setScrollState,
-    isScrolling
+    recordHeartbeatActivity,
+    isActive: isActive.current
   }
 
   return <TrackingContext.Provider value={value}>{children}</TrackingContext.Provider>
 }
 
-export default TrackingProvider
+// Export the TrackingContext for backward compatibility
+export { TrackingContext }

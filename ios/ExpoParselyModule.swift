@@ -6,9 +6,9 @@ public class ExpoParselyModule: Module {
   // Enhanced activity tracking properties
   private var isHeartbeatActive = false
   private var heartbeatTimer: Timer?
-  private var heartbeatIntervalMs: Int64 = 150000 // Parse.ly default: 150s
-  private var inactivityThresholdMs: Int64 = 5000 // Parse.ly default: 5s
-  private var maxDurationMs: Int64 = 3600000 // 1 hour max session
+  private var heartbeatIntervalMs: Int64 = 15000 // Default: 15 seconds
+  private var inactivityThresholdMs: Int64 = 5000 // Default: 5 seconds
+  private var maxDurationMs: Int64 = 3600000 // Default: 1 hour
   private var lastActivityTime: Int64 = 0
   private var sessionStartTime: Int64 = 0
   private var totalActivities: Int64 = 0
@@ -19,7 +19,7 @@ public class ExpoParselyModule: Module {
   private var currentVideoUrl: String = ""
   private var currentVideoId: String = ""
 
-  // Activity detection config
+  // Activity detection config (handled by HeartbeatTouchBoundary component)
   private var enableTouchDetection = true
   private var enableScrollDetection = true
   private var touchThrottleMs: Int64 = 500
@@ -40,26 +40,55 @@ public class ExpoParselyModule: Module {
       }
     }
 
-    Function("trackPageView") { (url: String, urlRef: String?, metadata: [String: Any]?, extraData: [String: Any]?, siteId: String?) in
+    Function("trackPageView") { (params: [String: Any]) in
       do {
-        guard let urlObj = URL(string: url) else {
-          print("ExpoParsely: Invalid URL: \(url)")
+        guard let url = params["url"] as? String,
+              let urlObj = URL(string: url) else {
+          print("ExpoParsely: Invalid URL in params: \(params)")
           return
         }
-        Parsely.sharedInstance.trackPageView(url: urlObj.absoluteString, urlref: urlRef ?? "")
+
+        let urlRef = params["urlRef"] as? String ?? ""
+        let siteId = params["siteId"] as? String ?? ""
+        let metadata = params["metadata"] as? [String: Any]
+        let extraData = params["extraData"] as? [String: Any]
+        let action = params["action"] as? String
+        let customData = params["data"] as? [String: Any]
+
+        // Merge custom data with extraData for Parse.ly
+        var finalExtraData = extraData ?? [:]
+        if let customData = customData {
+            finalExtraData.merge(customData) { (_, new) in new }
+        }
+
+        // Send page view to Parsely with enhanced metadata
+        if let action = action {
+            // Custom event with action
+            Parsely.sharedInstance.trackPageView(url: urlObj.absoluteString, urlref: urlRef, extraData: finalExtraData, siteId: siteId, action: action)
+        } else {
+            // Regular page view
+            Parsely.sharedInstance.trackPageView(url: urlObj.absoluteString, urlref: urlRef, extraData: finalExtraData, siteId: siteId)
+        }
+
         self.recordActivity()
       } catch {
         print("ExpoParsely trackPageView error: \(error.localizedDescription)")
       }
     }
 
-    Function("startEngagement") { (url: String, urlRef: String?, extraData: [String: Any]?, siteId: String?) in
+    Function("startEngagement") { (params: [String: Any]) in
       do {
-        guard let urlObj = URL(string: url) else {
-          print("ExpoParsely: Invalid URL: \(url)")
+        guard let url = params["url"] as? String,
+              let urlObj = URL(string: url) else {
+          print("ExpoParsely: Invalid URL in params: \(params)")
           return
         }
-        Parsely.sharedInstance.startEngagement(url: urlObj.absoluteString, urlref: urlRef ?? "", extraData: extraData, siteId: siteId ?? "")
+
+        let urlRef = params["urlRef"] as? String ?? ""
+        let siteId = params["siteId"] as? String ?? ""
+        let extraData = params["extraData"] as? [String: Any]
+
+        Parsely.sharedInstance.startEngagement(url: urlObj.absoluteString, urlref: urlRef, extraData: extraData, siteId: siteId)
         self.recordActivity()
         self.startHeartbeatTrackingInternal()
       } catch {
@@ -97,20 +126,8 @@ public class ExpoParselyModule: Module {
 
 
 
-    Function("trackElement") { (action: String, elementType: String, elementId: String, location: String) in
-      do {
-        // Track element as custom page view URL
-        let customUrlString = "https://app://element/\(elementId)?action=\(action)&type=\(elementType)&location=\(location)"
-        guard let customUrl = URL(string: customUrlString) else {
-          print("ExpoParsely: Invalid custom URL: \(customUrlString)")
-          return
-        }
-        Parsely.sharedInstance.trackPageView(url: customUrl.absoluteString)
-        self.recordActivity()
-      } catch {
-        print("ExpoParsely trackElement error: \(error.localizedDescription)")
-      }
-    }
+
+
 
     // Video tracking methods
     Function("trackPlay") { (url: String, videoMetadata: [String: Any], urlRef: String?, extraData: [String: Any]?, siteId: String?) in
@@ -294,4 +311,8 @@ public class ExpoParselyModule: Module {
   private func isCurrentlyScrollingInternal() -> Bool {
     return self.isScrolling
   }
+
+
+  // MARK: - Parsely Analytics Helper Methods
+
 }
