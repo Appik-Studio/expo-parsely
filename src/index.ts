@@ -19,8 +19,8 @@ export type {
 // Re-export the native module
 export { default } from './ExpoParselyModule'
 
-// Re-export hooks
-export { useReanimatedHeartbeat } from './hooks/useReanimatedHeartbeat'
+// Re-export heartbeat manager
+export { heartbeatManager } from './utils/HeartbeatManager'
 
 // Re-export debug utilities
 export { DebugLoggerContext, createDebugLogger, useDebugLogger } from './utils/debugLogger'

@@ -1,9 +1,28 @@
+import { HeartbeatDebugOverlay, ParselyProvider } from 'expo-parsely'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { HeartbeatDebugOverlay, ParselyProvider } from 'expo-parsely'
+import { useMemo } from 'react'
 
 const RootLayout = () => {
-  console.log('🔧 RootLayout: Rendering with ParselyProvider...')
+  // Memoize configs to prevent object recreation on every render
+  const heartbeatConfig = useMemo(
+    () => ({
+      enableHeartbeats: true,
+      secondsBetweenHeartbeats: 150,
+      activeTimeout: 5,
+      videoPlaying: false
+    }),
+    []
+  )
+
+  const activityDetectionConfig = useMemo(
+    () => ({
+      touchThrottleMs: 500,
+      scrollThrottleMs: 1000,
+      scrollThreshold: 5.0
+    }),
+    []
+  )
 
   return (
     <ParselyProvider
@@ -12,17 +31,8 @@ const RootLayout = () => {
       flushInterval={5000}
       dryRun={false}
       enableDebugLogging={true}
-      heartbeatConfig={{
-        enableHeartbeats: true, // Enable heartbeats to test the issue
-        secondsBetweenHeartbeats: 150,
-        activeTimeout: 5,
-        videoPlaying: false
-      }}
-      activityDetectionConfig={{
-        touchThrottleMs: 500,
-        scrollThrottleMs: 1000,
-        scrollThreshold: 5.0
-      }}>
+      heartbeatConfig={heartbeatConfig}
+      activityDetectionConfig={activityDetectionConfig}>
       <StatusBar style='auto' />
       <HeartbeatDebugOverlay />
       <Stack>

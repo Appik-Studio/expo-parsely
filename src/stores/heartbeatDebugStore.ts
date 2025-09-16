@@ -57,7 +57,6 @@ class HeartbeatDebugStoreSingleton {
     this.notify()
   }
 
-  // Update scroll state
   updateScrollState = (scrolling: boolean) => {
     this.data.scrollState = scrolling
     this.notify()

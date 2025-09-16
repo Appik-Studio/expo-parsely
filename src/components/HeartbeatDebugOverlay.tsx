@@ -1,7 +1,8 @@
-import { FC, ReactNode } from 'react'
+import { FC, ReactNode, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 
 import { useHeartbeatDebugStore } from '../stores/heartbeatDebugStore'
+import { heartbeatManager } from '../utils/HeartbeatManager'
 
 // Provider component that initializes the store
 export const HeartbeatDebugProvider: FC<{ children: ReactNode }> = ({ children }) => {
@@ -10,9 +11,35 @@ export const HeartbeatDebugProvider: FC<{ children: ReactNode }> = ({ children }
 }
 
 const HeartbeatDebugOverlay = () => {
-  const { stats, scrollState, resetStats } = useHeartbeatDebugStore()
+  const { scrollState, resetStats } = useHeartbeatDebugStore()
+  const [managerStats, setManagerStats] = useState(heartbeatManager.getStats())
 
-  // Time updates are now handled by the heartbeat hook
+  // Update stats from heartbeat manager
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setManagerStats(heartbeatManager.getStats())
+    }, 200)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Format last activity
+  const formatLastActivity = (timestamp: number): string => {
+    if (!timestamp) return 'Never'
+    const seconds = Math.floor((Date.now() - timestamp) / 1000)
+    if (seconds < 60) return `${seconds}s ago`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    return `${hours}h ago`
+  }
+
+  // Calculate derived stats
+  const sessionDuration = managerStats.sessionStart ? Math.floor((Date.now() - managerStats.sessionStart) / 1000) : 0
+  const timeSinceLastActivity = managerStats.lastActivity
+    ? Math.floor((Date.now() - managerStats.lastActivity) / 1000)
+    : 0
+  const isActive = managerStats.lastActivity && timeSinceLastActivity <= 5
 
   return (
     <View
@@ -32,26 +59,19 @@ const HeartbeatDebugOverlay = () => {
 
       <View style={{ gap: 4 }}>
         <Text style={{ fontSize: 12, color: 'white' }}>
-          Status:{' '}
-          <Text style={{ color: stats.isActive ? '#4ade80' : '#f87171' }}>
-            {stats.isActive ? 'Active' : 'Inactive'}
-          </Text>
+          Status: <Text style={{ color: isActive ? '#4ade80' : '#f87171' }}>{isActive ? 'Active' : 'Inactive'}</Text>
         </Text>
 
         <Text style={{ fontSize: 12, color: 'white' }}>
-          Activities: <Text style={{ color: '#60a5fa' }}>{stats.totalActivities}</Text>
+          Heartbeats: <Text style={{ color: '#a78bfa' }}>{managerStats.heartbeatCount}</Text>
         </Text>
 
         <Text style={{ fontSize: 12, color: 'white' }}>
-          Heartbeats: <Text style={{ color: '#a78bfa' }}>{stats.totalHeartbeats}</Text>
+          Duration: <Text style={{ color: '#fbbf24' }}>{sessionDuration}s</Text>
         </Text>
 
         <Text style={{ fontSize: 12, color: 'white' }}>
-          Duration: <Text style={{ color: '#fbbf24' }}>{stats.sessionDuration}s</Text>
-        </Text>
-
-        <Text style={{ fontSize: 12, color: 'white' }}>
-          Last Activity: <Text style={{ color: '#9ca3af' }}>{stats.lastActivity}</Text>
+          Last Activity: <Text style={{ color: '#9ca3af' }}>{formatLastActivity(managerStats.lastActivity)}</Text>
         </Text>
 
         <Text style={{ fontSize: 12, color: 'white' }}>
@@ -59,18 +79,11 @@ const HeartbeatDebugOverlay = () => {
         </Text>
 
         <Text style={{ fontSize: 12, color: 'white' }}>
-          Since Activity: <Text style={{ color: '#f59e0b' }}>{stats.timeSinceLastActivity}s</Text>
+          Since Activity: <Text style={{ color: '#f59e0b' }}>{timeSinceLastActivity}s</Text>
         </Text>
 
         <Text style={{ fontSize: 12, color: 'white' }}>
-          Engaged Time: <Text style={{ color: '#10b981' }}>{stats.totalEngagedTime}s</Text>
-        </Text>
-
-        <Text style={{ fontSize: 12, color: 'white' }}>
-          Session:{' '}
-          <Text style={{ color: stats.heartbeatSessionActive ? '#4ade80' : '#f87171' }}>
-            {stats.heartbeatSessionActive ? 'Active' : 'Inactive'}
-          </Text>
+          Engaged Time: <Text style={{ color: '#10b981' }}>{managerStats.totalEngagedTime}s</Text>
         </Text>
       </View>
 
@@ -82,7 +95,10 @@ const HeartbeatDebugOverlay = () => {
           paddingHorizontal: 8,
           paddingVertical: 4
         }}
-        onPress={resetStats}>
+        onPress={() => {
+          heartbeatManager.reset()
+          resetStats()
+        }}>
         <Text style={{ textAlign: 'center', fontSize: 12, color: 'white' }}>Reset</Text>
       </Pressable>
     </View>
