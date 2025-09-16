@@ -69,6 +69,7 @@ export interface VideoOptions {
 export interface TrackingContextValue {
   trackPageView: (context?: Partial<Record<string, any>>) => void
   isActive: boolean
+  recordActivity: () => void
 }
 
 // ParselyProvider props

@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native'
-import ExpoParsely from '../../src/index'
+
 import styles from './styles'
+import ExpoParsely from 'expo-parsely'
 
 const HomePage = () => {
   // Track page view on mount

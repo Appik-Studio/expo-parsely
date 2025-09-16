@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { ParselyProvider } from '../../src/index'
+import { HeartbeatDebugOverlay, ParselyProvider } from 'expo-parsely'
 
 const RootLayout = () => {
   console.log('🔧 RootLayout: Rendering with ParselyProvider...')
@@ -24,6 +24,7 @@ const RootLayout = () => {
         scrollThreshold: 5.0
       }}>
       <StatusBar style='auto' />
+      <HeartbeatDebugOverlay />
       <Stack>
         <Stack.Screen name='index' options={{ title: 'Parse.ly SDK' }} />
       </Stack>

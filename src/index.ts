@@ -28,9 +28,11 @@ export { DebugLoggerContext, createDebugLogger, useDebugLogger } from './utils/d
 // Re-export components
 export {
   default as HeartbeatDebugOverlay,
-  HeartbeatDebugProvider,
-  useHeartbeatDebug
+  HeartbeatDebugProvider
 } from './components/HeartbeatDebugOverlay'
+
+// Re-export store
 export { HeartbeatTouchBoundary, isCurrentlyScrolling } from './components/HeartbeatTouchBoundary'
 export { ParselyProvider, useTrackingContext } from './components/ParselyProvider'
 export { ParselyTrackablePageView } from './components/ParselyTrackablePageView'
+export { heartbeatDebugStore, useHeartbeatDebugStore } from './stores/heartbeatDebugStore'

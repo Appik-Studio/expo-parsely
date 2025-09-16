@@ -1,87 +1,18 @@
-import { createContext, FC, ReactNode, useContext, useEffect, useState } from 'react'
+import { FC, ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 
-import ExpoParsely from '../ExpoParselyModule'
+import { useHeartbeatDebugStore } from '../stores/heartbeatDebugStore'
 
-// Heartbeat debug context
-interface HeartbeatDebugContextType {
-  stats: {
-    isActive: boolean
-    lastActivity: string
-    sessionDuration: number
-    totalActivities: number
-    totalHeartbeats: number
-  }
-  resetStats: () => void
-  scrollState: boolean
-}
-
-interface HeartbeatDebugContextValue extends HeartbeatDebugContextType {
-  updateDebugData: (newData: Partial<HeartbeatDebugContextType>) => void
-}
-
-export const HeartbeatDebugContext = createContext<HeartbeatDebugContextValue | null>(null)
-
-export const useHeartbeatDebugContext = () => {
-  const context = useContext(HeartbeatDebugContext)
-  if (!context) {
-    throw new Error('useHeartbeatDebugContext must be used within a HeartbeatDebugProvider')
-  }
-  return context
-}
-
-// Hook for accessing debug data (used by HeartbeatDebugOverlay)
-export const useHeartbeatDebug = () => {
-  const context = useContext(HeartbeatDebugContext)
-  if (!context) {
-    throw new Error('useHeartbeatDebug must be used within a HeartbeatDebugProvider')
-  }
-
-  const { stats, resetStats, scrollState, updateDebugData } = context
-  return { stats, resetStats, scrollState, updateDebugData }
-}
-
+// Provider component that initializes the store
 export const HeartbeatDebugProvider: FC<{ children: ReactNode }> = ({ children }) => {
-  const [debugData, setDebugData] = useState<HeartbeatDebugContextType>({
-    stats: {
-      isActive: false,
-      lastActivity: 'Never',
-      sessionDuration: 0,
-      totalActivities: 0,
-      totalHeartbeats: 0
-    },
-    resetStats: () => {},
-    scrollState: false
-  })
-
-  const value: HeartbeatDebugContextValue = {
-    ...debugData,
-    updateDebugData: (newData: Partial<HeartbeatDebugContextType>) => {
-      setDebugData(prev => ({ ...prev, ...newData }))
-    }
-  }
-
-  return <HeartbeatDebugContext.Provider value={value}>{children}</HeartbeatDebugContext.Provider>
+  // No need for scroll state polling - it's handled by HeartbeatTouchBoundary
+  return <>{children}</>
 }
 
 const HeartbeatDebugOverlay = () => {
-  const { resetStats, stats } = useHeartbeatDebug()
-  const [scrollState, setScrollState] = useState(false)
+  const { stats, scrollState, resetStats } = useHeartbeatDebugStore()
 
-  // Update scroll state every 100ms
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const scrolling = await ExpoParsely.isCurrentlyScrolling()
-        setScrollState(scrolling)
-      } catch (error) {
-        // Fallback if method not implemented yet
-        setScrollState(false)
-      }
-    }, 100)
-
-    return () => clearInterval(interval)
-  }, [])
+  // Time updates are now handled by the heartbeat hook
 
   return (
     <View
@@ -125,6 +56,21 @@ const HeartbeatDebugOverlay = () => {
 
         <Text style={{ fontSize: 12, color: 'white' }}>
           Scrolling: <Text style={{ color: scrollState ? '#fb923c' : '#4ade80' }}>{scrollState ? 'YES' : 'NO'}</Text>
+        </Text>
+
+        <Text style={{ fontSize: 12, color: 'white' }}>
+          Since Activity: <Text style={{ color: '#f59e0b' }}>{stats.timeSinceLastActivity}s</Text>
+        </Text>
+
+        <Text style={{ fontSize: 12, color: 'white' }}>
+          Engaged Time: <Text style={{ color: '#10b981' }}>{stats.totalEngagedTime}s</Text>
+        </Text>
+
+        <Text style={{ fontSize: 12, color: 'white' }}>
+          Session:{' '}
+          <Text style={{ color: stats.heartbeatSessionActive ? '#4ade80' : '#f87171' }}>
+            {stats.heartbeatSessionActive ? 'Active' : 'Inactive'}
+          </Text>
         </Text>
       </View>
 

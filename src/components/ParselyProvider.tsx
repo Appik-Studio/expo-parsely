@@ -1,10 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect } from 'react'
 
-import { HeartbeatDebugProvider } from '..'
 import type { ActivityDetectionConfig, ParselyProviderProps, TrackingContextValue } from '../ExpoParsely.types'
 import ExpoParsely from '../ExpoParselyModule'
 import { useReanimatedHeartbeat } from '../hooks/useReanimatedHeartbeat'
-import { DebugLoggerContext, createDebugLogger } from '../utils/debugLogger'
+import { createDebugLogger, DebugLoggerContext } from '../utils/debugLogger'
+import { HeartbeatDebugProvider } from './HeartbeatDebugOverlay'
 import { HeartbeatTouchBoundary } from './HeartbeatTouchBoundary'
 
 // Default activity detection configuration
@@ -60,9 +60,9 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
   }, [autoInitialize, siteId, debugLogger])
 
   // Initialize heartbeat tracking
-  const { startHeartbeat, stopHeartbeat, isActive } = useReanimatedHeartbeat(heartbeatConfig)
+  const { startHeartbeat, stopHeartbeat, isActive, recordActivity } = useReanimatedHeartbeat(heartbeatConfig)
 
-  // Start heartbeat when provider mounts
+  // Start heartbeat when provider mounts (only once)
   useEffect(() => {
     startHeartbeat()
     return () => {
@@ -70,7 +70,7 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
         debugLogger.error('🔵 [Parse.ly]', 'Failed to stop heartbeat on cleanup:', error)
       })
     }
-  }, [startHeartbeat, stopHeartbeat, debugLogger])
+  }, []) // Empty dependency array - only run once on mount
 
   // Tracking functionality
   const trackPageView = useCallback(
@@ -93,7 +93,8 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
 
   const trackingContextValue: TrackingContextValue = {
     trackPageView,
-    isActive: isActive.value
+    isActive,
+    recordActivity
   }
 
   const enableHeartbeats = heartbeatConfig.enableHeartbeats ?? true

@@ -1,39 +1,18 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppState, AppStateStatus } from 'react-native'
-import { runOnUI, useSharedValue } from 'react-native-reanimated'
+import { useSharedValue } from 'react-native-reanimated'
 
 import type { HeartbeatConfig } from '../ExpoParsely.types'
 import ExpoParsely from '../ExpoParselyModule'
-import { HeartbeatDebugContext } from '../components/HeartbeatDebugOverlay'
+import { heartbeatDebugStore } from '../stores/heartbeatDebugStore'
 import { useDebugLogger } from '../utils/debugLogger'
 
-// Default heartbeat configuration (matches Parse.ly engaged-time documentation)
 const DEFAULT_HEARTBEAT_CONFIG: Required<HeartbeatConfig> = {
   enableHeartbeats: true,
-  secondsBetweenHeartbeats: 150, // Parse.ly standard: 150 seconds
-  activeTimeout: 5, // Parse.ly standard: 5 seconds
-  onHeartbeat: () => {}, // Default no-op callback
-  videoPlaying: false // Default: no video playing
-}
-
-/**
- * Reanimated-optimized heartbeat hook that integrates with ExpoParsely engagement tracking
- * Uses React Native Reanimated for native performance in activity detection
- */
-// Internal hook for activity recording only (used by HeartbeatTouchBoundary)
-export const useActivityRecording = () => {
-  // Use Reanimated shared values for better performance
-  const isActive = useSharedValue(false)
-
-  // Record activity (resets inactivity timer) - optimized with Reanimated
-  const recordActivity = useCallback(() => {
-    runOnUI(() => {
-      'worklet'
-      isActive.value = true
-    })()
-  }, [])
-
-  return { recordActivity, isActive: isActive.value }
+  secondsBetweenHeartbeats: 150,
+  activeTimeout: 5,
+  onHeartbeat: () => {},
+  videoPlaying: false
 }
 
 export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) => {
@@ -50,267 +29,283 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
     ]
   )
 
-  // Convert Parse.ly seconds to milliseconds for internal use
   const intervalMs = finalConfig.secondsBetweenHeartbeats * 1000
   const activeTimeoutMs = finalConfig.activeTimeout * 1000
 
-  // Access debug context to update debug data
-  const debugContext = useContext(HeartbeatDebugContext)
-
-  // Use Reanimated shared values for better performance
-  const heartbeatTimer = useSharedValue(null)
-  const lastActivity = useSharedValue(Date.now())
-  const sessionStart = useSharedValue(Date.now())
+  // Shared values for UI thread access
+  const lastActivity = useSharedValue(0)
   const isActive = useSharedValue(false)
-  const lastHeartbeatSent = useSharedValue(Date.now())
-  const totalEngagedTime = useSharedValue(0)
 
-  // Helper functions to access values consistently
-  const getValue = (ref: any) => ref.value
-  const setValue = (ref: any, value: any) => {
-    ref.value = value
-  }
-
-  // Debug stats tracking
+  // JS thread state
+  const [sessionActive, setSessionActive] = useState(false)
   const [totalActivities, setTotalActivities] = useState(0)
   const [totalHeartbeats, setTotalHeartbeats] = useState(0)
-  const [scrollState, setScrollState] = useState(false)
+  const [debugInfo, setDebugInfo] = useState({
+    isActive: false,
+    lastActivity: 0,
+    sessionStart: 0,
+    totalEngagedTime: 0
+  })
 
-  // Record activity (resets inactivity timer) - optimized with Reanimated
-  const recordActivity = useCallback(() => {
-    runOnUI(() => {
-      'worklet'
-      const now = Date.now()
+  // Refs for timer management
+  const heartbeatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sessionStartRef = useRef(0)
+  const lastHeartbeatRef = useRef(0)
+  const totalEngagedTimeRef = useRef(0)
 
-      // Fast path: immediate shared value updates on UI thread
-      const wasActive = isActive.value
-      lastActivity.value = now
+  // Clear any existing timer
+  const clearHeartbeatTimer = useCallback(() => {
+    if (heartbeatTimerRef.current) {
+      clearTimeout(heartbeatTimerRef.current)
+      heartbeatTimerRef.current = null
+    }
+  }, [])
 
-      // Note: setTotalActivities cannot be called directly in worklet
-      // This will be handled outside the worklet
+  // Send heartbeat and schedule next one
+  const sendHeartbeat = useCallback(() => {
+    if (!sessionActive) return
 
-      if (!wasActive) {
-        isActive.value = true
-        // Logging cannot be done in worklet context
-      }
-    })()
-
-    // Handle state updates and logging outside worklet
     const now = Date.now()
-    const previousActivity = lastActivity.value
-    const timeSincePrevious = now - previousActivity
+    const timeSinceActivity = now - lastActivity.value
+    const isEngaged = finalConfig.videoPlaying || timeSinceActivity <= activeTimeoutMs
+
+    if (!isEngaged) {
+      debugLogger.warn('💓 [Parse.ly Heartbeat]', 'Session inactive - stopping heartbeat')
+      setSessionActive(false)
+      isActive.value = false
+      return
+    }
+
+    // Calculate engaged time increment
+    const timeSinceLastHeartbeat = now - lastHeartbeatRef.current
+    const engagedTimeIncrement = Math.floor(timeSinceLastHeartbeat / 1000)
+
+    // Update totals
+    totalEngagedTimeRef.current += engagedTimeIncrement
+    lastHeartbeatRef.current = now
+
+    setTotalHeartbeats(prev => prev + 1)
+    setDebugInfo(prev => ({
+      ...prev,
+      totalEngagedTime: totalEngagedTimeRef.current
+    }))
+
+    // Call user callback
+    if (finalConfig.onHeartbeat) {
+      finalConfig.onHeartbeat(engagedTimeIncrement)
+    }
+
+    debugLogger.success('💓 [Parse.ly Heartbeat]', '💓 Heartbeat sent', {
+      engagedTimeIncrement,
+      totalEngagedTime: totalEngagedTimeRef.current
+    })
+
+    // Schedule next heartbeat
+    heartbeatTimerRef.current = setTimeout(sendHeartbeat, intervalMs)
+  }, [
+    sessionActive,
+    finalConfig.videoPlaying,
+    finalConfig.onHeartbeat,
+    activeTimeoutMs,
+    intervalMs,
+    debugLogger
+  ])
+
+  // Record activity
+  const recordActivity = useCallback(() => {
+    if (!finalConfig.enableHeartbeats) return
+
+    const now = Date.now()
     const wasActive = isActive.value
 
+    lastActivity.value = now
+    isActive.value = true
+
     setTotalActivities(prev => prev + 1)
+    setDebugInfo(prev => ({
+      ...prev,
+      isActive: true,
+      lastActivity: now
+    }))
 
     if (!wasActive) {
-      debugLogger.success('💓 [Parse.ly Heartbeat]', '🎯 ACTIVITY DETECTED - SESSION ACTIVATED', {
-        timeSincePrevious: `${timeSincePrevious}ms`,
-        timestamp: now
-      })
-    } else {
-      debugLogger.log('💓 [Parse.ly Heartbeat]', '🎯 ACTIVITY RECORDED', {
-        timeSincePrevious: `${timeSincePrevious}ms`,
-        timestamp: now
-      })
+      debugLogger.success('💓 [Parse.ly Heartbeat]', '🎯 ACTIVITY DETECTED - SESSION ACTIVATED')
     }
-  }, [debugLogger])
+  }, [finalConfig.enableHeartbeats, debugLogger])
 
-  // Internal heartbeat check function
-  const performHeartbeatCheckInternal = useCallback(
-    (currentlyScrolling: boolean) => {
-      const now = Date.now()
-      const timeSinceActivity = now - getValue(lastActivity)
-
-      // Parse.ly engagement formula: video playing OR (interacted recently AND window in focus)
-      const isEngaged =
-        finalConfig.videoPlaying || currentlyScrolling || timeSinceActivity <= activeTimeoutMs
-
-      // If currently scrolling, skip inactivity check but continue with heartbeat
-      // Parse.ly counts scroll as engagement: https://docs.parse.ly/engaged-time/
-      if (currentlyScrolling) {
-        debugLogger.log(
-          '💓 [Parse.ly Heartbeat]',
-          'Scroll engagement - Preventing inactivity check, continuing heartbeat (Parse.ly methodology)'
-        )
-      }
-
-      if (!isEngaged) {
-        setValue(isActive, false)
-        const currentTimer = getValue(heartbeatTimer)
-        if (currentTimer) {
-          clearTimeout(currentTimer)
-          setValue(heartbeatTimer, null)
-        }
-
-        const reason = timeSinceActivity > activeTimeoutMs ? 'inactivity' : 'max duration'
-        debugLogger.warn('💓 [Parse.ly Heartbeat]', `💀 Heartbeat stopped - ${reason}`, {
-          timeSinceActivity: `${timeSinceActivity}ms`,
-          totalSessionTime: `${Math.floor((now - getValue(sessionStart)) / 1000)}s`
-        })
-        return
-      }
-
-      // Calculate engaged time since last heartbeat (Parse.ly methodology)
-      const timeSinceLastHeartbeat = now - getValue(lastHeartbeatSent)
-      const engagedTimeIncrement = Math.floor(timeSinceLastHeartbeat / 1000)
-
-      // Update total engaged time
-      setValue(totalEngagedTime, getValue(totalEngagedTime) + engagedTimeIncrement)
-      setValue(lastHeartbeatSent, now)
-
-      // Update heartbeat counter
-      setTotalHeartbeats(prev => prev + 1)
-
-      // Call Parse.ly onHeartbeat callback
-      if (finalConfig.onHeartbeat) {
-        finalConfig.onHeartbeat(engagedTimeIncrement)
-      }
-
-      debugLogger.success('💓 [Parse.ly Heartbeat]', '💓 Sending heartbeat event', {
-        engagedTimeIncrement
-      })
-      debugLogger.info('💓 [Parse.ly Heartbeat]', `⏰ Next heartbeat scheduled in ${intervalMs}ms`)
-
-      // Schedule next heartbeat check using Parse.ly interval
-      setValue(heartbeatTimer, setTimeout(performHeartbeatCheck, intervalMs))
-    },
-    [finalConfig, activeTimeoutMs, intervalMs]
-  )
-
-  const performHeartbeatCheck = useCallback(() => {
-    // For now, assume not scrolling (scroll detection not implemented yet)
-    const currentlyScrolling = false
-    performHeartbeatCheckInternal(currentlyScrolling)
-  }, [performHeartbeatCheckInternal])
-
-  // Start heartbeat tracking
+  // Start heartbeat session
   const startHeartbeat = useCallback(
     async (url?: string) => {
       if (!finalConfig.enableHeartbeats) {
-        debugLogger.log('💓 [Parse.ly Heartbeat]', 'Heartbeats disabled - not starting tracking')
+        debugLogger.log('💓 [Parse.ly Heartbeat]', 'Heartbeats disabled')
+        return
+      }
+
+      if (sessionActive) {
+        debugLogger.log('💓 [Parse.ly Heartbeat]', 'Session already active')
         return
       }
 
       try {
-        // Start engagement tracking with Parse.ly SDK
-        // FIXME: Check if url is required
         if (url) {
           await ExpoParsely.startEngagement(url)
-          debugLogger.log('💓 [Parse.ly Heartbeat]', 'Started engagement tracking for URL:', url)
-        } else {
-          debugLogger.log(
-            '💓 [Parse.ly Heartbeat]',
-            'Started heartbeat without URL - manual engagement tracking required'
-          )
+          debugLogger.log('💓 [Parse.ly Heartbeat]', 'Started engagement tracking for:', url)
         }
 
-        runOnUI(() => {
-          'worklet'
-          isActive.value = true
-          sessionStart.value = Date.now()
-          lastActivity.value = Date.now()
-        })()
+        const now = Date.now()
 
-        // Start the heartbeat loop
-        performHeartbeatCheck()
+        // Initialize session
+        sessionStartRef.current = now
+        lastHeartbeatRef.current = now
+        totalEngagedTimeRef.current = 0
+        lastActivity.value = now
+        isActive.value = true
+
+        setSessionActive(true)
+        setDebugInfo({
+          isActive: true,
+          lastActivity: now,
+          sessionStart: now,
+          totalEngagedTime: 0
+        })
+
+        debugLogger.log('💓 [Parse.ly Heartbeat]', 'Heartbeat session started')
+
+        // Start heartbeat loop
+        heartbeatTimerRef.current = setTimeout(sendHeartbeat, intervalMs)
       } catch (error) {
         debugLogger.error('💓 [Parse.ly Heartbeat]', 'Failed to start heartbeat:', error)
       }
     },
-    [finalConfig, performHeartbeatCheck, debugLogger]
+    [finalConfig.enableHeartbeats, sessionActive, intervalMs, sendHeartbeat, debugLogger]
   )
 
-  // Stop heartbeat tracking
+  // Stop heartbeat session
   const stopHeartbeat = useCallback(async () => {
-    if (!finalConfig.enableHeartbeats) return
+    if (!sessionActive) {
+      debugLogger.log('💓 [Parse.ly Heartbeat]', 'No active session to stop')
+      return
+    }
 
     try {
-      // Stop engagement tracking with Parse.ly SDK
+      clearHeartbeatTimer()
       await ExpoParsely.stopEngagement()
 
-      runOnUI(() => {
-        'worklet'
-        isActive.value = false
-        const currentTimer = heartbeatTimer.value
-        if (currentTimer) {
-          clearInterval(currentTimer)
-          heartbeatTimer.value = null
-        }
-      })()
+      setSessionActive(false)
+      isActive.value = false
+
+      setDebugInfo(prev => ({
+        ...prev,
+        isActive: false
+      }))
+
+      debugLogger.log('💓 [Parse.ly Heartbeat]', 'Heartbeat session stopped')
     } catch (error) {
       debugLogger.error('💓 [Parse.ly Heartbeat]', 'Failed to stop heartbeat:', error)
     }
-  }, [finalConfig, debugLogger])
+  }, [sessionActive, clearHeartbeatTimer, debugLogger])
 
-  // Handle app state changes
+  // Video playing state
+  const setVideoPlaying = useCallback(
+    (playing: boolean) => {
+      finalConfig.videoPlaying = playing
+      debugLogger.log('💓 [Parse.ly Heartbeat]', `Video playing: ${playing}`)
+    },
+    [finalConfig, debugLogger]
+  )
+
+  // App state handling - use refs to avoid dependency loops
+  const startHeartbeatRef = useRef(startHeartbeat)
+  const stopHeartbeatRef = useRef(stopHeartbeat)
+
+  useEffect(() => {
+    startHeartbeatRef.current = startHeartbeat
+    stopHeartbeatRef.current = stopHeartbeat
+  })
+
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      debugLogger.log('💓 [Parse.ly Heartbeat]', `App state: ${nextAppState}`)
+
       if (nextAppState === 'background') {
-        debugLogger.log('💓 [Parse.ly Heartbeat]', 'App going to background - stopping heartbeat')
-        stopHeartbeat()
-      } else if (nextAppState === 'active' && !getValue(isActive)) {
-        debugLogger.log(
-          '💓 [Parse.ly Heartbeat]',
-          'App coming to foreground - restarting heartbeat'
-        )
-        startHeartbeat()
+        stopHeartbeatRef.current()
+      } else if (nextAppState === 'active' && !sessionActive) {
+        startHeartbeatRef.current()
       }
     }
 
     const subscription = AppState.addEventListener('change', handleAppStateChange)
-
     return () => {
-      debugLogger.log('💓 [Parse.ly Heartbeat]', 'useEffect cleanup - stopping heartbeat')
       subscription.remove()
-      stopHeartbeat()
+      stopHeartbeatRef.current()
     }
-  }, [startHeartbeat, stopHeartbeat, debugLogger])
+  }, [sessionActive, debugLogger])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      clearHeartbeatTimer()
       stopHeartbeat()
     }
-  }, [stopHeartbeat])
+  }, [clearHeartbeatTimer, stopHeartbeat])
 
-  // Check heartbeat status
-  const isHeartbeatActive = useCallback(async () => {
-    return getValue(isActive)
-  }, [isActive])
-
-  // Parse.ly video tracking support
-  const setVideoPlaying = useCallback(
-    (playing: boolean) => {
-      finalConfig.videoPlaying = playing
-    },
-    [finalConfig]
-  )
-
-  // Reset debug stats
-  const resetStats = useCallback(() => {
-    setTotalActivities(0)
-    setTotalHeartbeats(0)
-    debugLogger.debug('💓 [Parse.ly Heartbeat]', '💓 [HeartbeatDebug] Reset stats requested')
-  }, [debugLogger])
-
-  // Manual activity recording with logging
-  const globalRecordActivity = useCallback(() => {
-    if (!finalConfig.enableHeartbeats) return
-    debugLogger.log('💓 [Parse.ly Heartbeat]', 'Manual activity recorded from external call')
-    recordActivity()
-  }, [finalConfig.enableHeartbeats, recordActivity, debugLogger])
-
-  // Update debug context when stats change
+  // Update debug store when key data changes
   useEffect(() => {
-    if (debugContext) {
-      const sessionDuration = Math.floor((Date.now() - getValue(sessionStart)) / 1000)
-      const lastActivityTimestamp = getValue(lastActivity)
-      const isActiveNow = getValue(isActive)
+    const now = Date.now()
+    const sessionDuration = debugInfo.sessionStart
+      ? Math.floor((now - debugInfo.sessionStart) / 1000)
+      : 0
+    const timeSinceLastActivity = debugInfo.lastActivity
+      ? Math.floor((now - debugInfo.lastActivity) / 1000)
+      : 0
+
+    const formatLastActivity = (timestamp: number): string => {
+      if (!timestamp) return 'Never'
+      const seconds = Math.floor((now - timestamp) / 1000)
+      if (seconds < 60) return `${seconds}s ago`
+      const minutes = Math.floor(seconds / 60)
+      if (minutes < 60) return `${minutes}m ago`
+      const hours = Math.floor(minutes / 60)
+      return `${hours}h ago`
+    }
+
+    heartbeatDebugStore.updateDebugData({
+      stats: {
+        isActive: debugInfo.isActive,
+        lastActivity: formatLastActivity(debugInfo.lastActivity),
+        sessionDuration,
+        totalActivities,
+        totalHeartbeats,
+        timeSinceLastActivity,
+        totalEngagedTime: Math.floor(debugInfo.totalEngagedTime),
+        heartbeatSessionActive: sessionActive
+      }
+    })
+  }, [
+    debugInfo.isActive,
+    debugInfo.lastActivity,
+    debugInfo.sessionStart,
+    debugInfo.totalEngagedTime,
+    totalActivities,
+    totalHeartbeats,
+    sessionActive
+  ])
+
+  // Update debug store every second for time-sensitive values only
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Only update time-sensitive values to avoid dependency loops
+      const now = Date.now()
+      const sessionDuration = debugInfo.sessionStart
+        ? Math.floor((now - debugInfo.sessionStart) / 1000)
+        : 0
+      const timeSinceLastActivity = debugInfo.lastActivity
+        ? Math.floor((now - debugInfo.lastActivity) / 1000)
+        : 0
 
       const formatLastActivity = (timestamp: number): string => {
-        if (!timestamp || timestamp === getValue(sessionStart)) return 'Never'
-        const seconds = Math.floor((Date.now() - timestamp) / 1000)
+        if (!timestamp) return 'Never'
+        const seconds = Math.floor((now - timestamp) / 1000)
         if (seconds < 60) return `${seconds}s ago`
         const minutes = Math.floor(seconds / 60)
         if (minutes < 60) return `${minutes}m ago`
@@ -318,60 +313,36 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
         return `${hours}h ago`
       }
 
-      debugContext.updateDebugData({
-        stats: {
-          isActive: isActiveNow,
-          lastActivity: formatLastActivity(lastActivityTimestamp),
-          sessionDuration,
-          totalActivities,
-          totalHeartbeats
-        },
-        resetStats,
-        scrollState
+      heartbeatDebugStore.updateStats({
+        lastActivity: formatLastActivity(debugInfo.lastActivity),
+        sessionDuration,
+        timeSinceLastActivity
       })
-    }
-  }, [debugContext, totalActivities, totalHeartbeats, scrollState, resetStats])
-
-  // Log hook initialization
-  useEffect(() => {
-    debugLogger.log('💓 [Parse.ly Heartbeat]', 'Hook initialized with config:', finalConfig)
-  }, [finalConfig, debugLogger])
-
-  // Poll scroll state for debug overlay
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const scrolling = await ExpoParsely.isCurrentlyScrolling()
-        setScrollState(scrolling)
-      } catch {
-        // Fallback if method not implemented yet
-        setScrollState(false)
-      }
-    }, 100)
+    }, 1000)
 
     return () => clearInterval(interval)
-  }, [debugLogger])
+  }, [debugInfo.sessionStart, debugInfo.lastActivity])
 
-  // Expose debug information for HeartbeatDebugOverlay
-  const getDebugInfo = useCallback(
-    () => ({
-      isActive: getValue(isActive),
-      timeSinceActivity: Date.now() - getValue(lastActivity),
-      totalEngagedTime: getValue(totalEngagedTime) * 1000, // Convert to milliseconds for consistency
-      lastActivity: getValue(lastActivity),
-      sessionStart: getValue(sessionStart)
-    }),
-    [isActive, lastActivity, totalEngagedTime, sessionStart]
-  )
+  // Debug info getter
+  const getDebugInfo = useCallback(() => {
+    const now = Date.now()
+    return {
+      isActive: debugInfo.isActive,
+      timeSinceActivity: debugInfo.lastActivity ? now - debugInfo.lastActivity : 0,
+      totalEngagedTime: debugInfo.totalEngagedTime * 1000,
+      lastActivity: debugInfo.lastActivity,
+      sessionStart: debugInfo.sessionStart
+    }
+  }, [debugInfo])
 
   return {
     startHeartbeat,
     stopHeartbeat,
-    recordActivity: globalRecordActivity,
-    isHeartbeatActive,
-    isActive,
+    recordActivity,
+    isHeartbeatActive: () => debugInfo.isActive,
+    isActive: debugInfo.isActive,
     setVideoPlaying,
-    totalEngagedTime,
+    totalEngagedTime: debugInfo.totalEngagedTime,
     getDebugInfo,
     config: finalConfig
   }
