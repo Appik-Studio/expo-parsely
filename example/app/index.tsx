@@ -1,6 +1,6 @@
-import ExpoParsely from 'expo-parsely'
 import { useEffect } from 'react'
 import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native'
+import ExpoParsely from '../../src/index'
 import styles from './styles'
 
 const HomePage = () => {
