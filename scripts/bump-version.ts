@@ -3,20 +3,21 @@ import path from 'path'
 
 const packageJsonPath = path.resolve(process.cwd(), 'package.json')
 const examplePackageJsonPath = path.resolve(process.cwd(), 'example/package.json')
+const androidBuildGradlePath = path.resolve(process.cwd(), 'android/build.gradle')
 
 type ReleaseType = 'patch' | 'minor' | 'major'
 
 const bumpVersion = async (releaseType: ReleaseType = 'patch') => {
   console.log(`🚀 Bumping ${releaseType} version...`)
-  
+
   // Read main package.json
   const packageJsonContent = await readFile(packageJsonPath, 'utf-8')
   const packageJson = JSON.parse(packageJsonContent)
 
   const [major, minor, patch] = packageJson.version.split('.').map(Number)
-  
+
   let newMajor = major
-  let newMinor = minor  
+  let newMinor = minor
   let newPatch = patch
 
   switch (releaseType) {
@@ -40,11 +41,24 @@ const bumpVersion = async (releaseType: ReleaseType = 'patch') => {
   // Write updated main package.json
   await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n')
 
+  // Update Android build.gradle version
+  try {
+    const androidBuildContent = await readFile(androidBuildGradlePath, 'utf-8')
+    const updatedAndroidBuild = androidBuildContent.replace(
+      /version = ['"][\d.]+['"]/,
+      `version = '${newVersion}'`
+    )
+    await writeFile(androidBuildGradlePath, updatedAndroidBuild)
+    console.log(`🤖 Updated Android build.gradle version to ${newVersion}`)
+  } catch (error) {
+    console.log('⚠️  Android build.gradle not found or could not be updated')
+  }
+
   // Update example package.json if it exists
   try {
     const exampleContent = await readFile(examplePackageJsonPath, 'utf-8')
     const exampleJson = JSON.parse(exampleContent)
-    
+
     if (exampleJson.dependencies && exampleJson.dependencies['@appik-studio/expo-parsely']) {
       exampleJson.dependencies['@appik-studio/expo-parsely'] = `^${newVersion}`
       await writeFile(examplePackageJsonPath, JSON.stringify(exampleJson, null, 2) + '\n')
@@ -55,7 +69,7 @@ const bumpVersion = async (releaseType: ReleaseType = 'patch') => {
   }
 
   console.log(`✅ Version bumped from ${major}.${minor}.${patch} to ${newVersion}`)
-  
+
   return newVersion
 }
 
@@ -64,4 +78,4 @@ const releaseType = (process.argv[2] as ReleaseType) || 'patch'
 bumpVersion(releaseType).catch(error => {
   console.error('❌ Error bumping version:', error)
   process.exit(1)
-}) 
+})
