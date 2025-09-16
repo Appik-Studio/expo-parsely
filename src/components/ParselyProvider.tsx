@@ -1,12 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect } from 'react'
 
+import { HeartbeatDebugProvider } from '..'
 import type { ActivityDetectionConfig, ParselyProviderProps, TrackingContextValue } from '../ExpoParsely.types'
 import ExpoParsely from '../ExpoParselyModule'
-import { HeartbeatDebugProvider } from './HeartbeatDebugOverlay'
-import { HeartbeatTouchBoundary } from './HeartbeatTouchBoundary'
 import { useReanimatedHeartbeat } from '../hooks/useReanimatedHeartbeat'
-
-const isDev = __DEV__
+import { DebugLoggerContext, createDebugLogger } from '../utils/debugLogger'
+import { HeartbeatTouchBoundary } from './HeartbeatTouchBoundary'
 
 // Default activity detection configuration
 const DEFAULT_ACTIVITY_DETECTION_CONFIG: ActivityDetectionConfig = {
@@ -45,19 +44,20 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
   },
   activityDetectionConfig = DEFAULT_ACTIVITY_DETECTION_CONFIG
 }) => {
+  // Create debug logger instance
+  const debugLogger = createDebugLogger(enableDebugLogging)
+
   // Initialize Parse.ly SDK
   useEffect(() => {
     if (autoInitialize && siteId) {
       try {
         ExpoParsely.init(siteId)
-        if (isDev) {
-          console.log('🔵 [Parse.ly] Parse.ly initialized successfully', { siteId })
-        }
+        debugLogger.success('🔵 [Parse.ly]', 'Parse.ly initialized successfully', { siteId })
       } catch (error) {
-        console.error('Failed to initialize Parse.ly:', error)
+        debugLogger.error('🔵 [Parse.ly]', 'Failed to initialize Parse.ly:', error)
       }
     }
-  }, [autoInitialize, siteId])
+  }, [autoInitialize, siteId, debugLogger])
 
   // Initialize heartbeat tracking
   const { startHeartbeat, stopHeartbeat, isActive } = useReanimatedHeartbeat(heartbeatConfig)
@@ -67,30 +67,33 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
     startHeartbeat()
     return () => {
       stopHeartbeat().catch(error => {
-        if (isDev) console.error('Failed to stop heartbeat on cleanup:', error)
+        debugLogger.error('🔵 [Parse.ly]', 'Failed to stop heartbeat on cleanup:', error)
       })
     }
-  }, [startHeartbeat, stopHeartbeat])
+  }, [startHeartbeat, stopHeartbeat, debugLogger])
 
   // Tracking functionality
-  const trackPageView = useCallback((context?: Partial<Record<string, any>>) => {
-    try {
-      if (context?.url) {
-        ExpoParsely.trackPageView(context.url, {
-          metadata: {
-            section: context.section || 'Unknown',
-            title: context.title || ''
-          }
-        })
+  const trackPageView = useCallback(
+    (context?: Partial<Record<string, any>>) => {
+      try {
+        if (context?.url) {
+          ExpoParsely.trackPageView(context.url, {
+            metadata: {
+              section: context.section || 'Unknown',
+              title: context.title || ''
+            }
+          })
+        }
+      } catch (error) {
+        debugLogger.error('🔵 [Parse.ly]', 'ParselyProvider trackPageView failed:', error)
       }
-    } catch (error) {
-      if (isDev) console.error('ParselyProvider trackPageView failed:', error)
-    }
-  }, [])
+    },
+    [debugLogger]
+  )
 
   const trackingContextValue: TrackingContextValue = {
     trackPageView,
-    isActive
+    isActive: isActive.value
   }
 
   const enableHeartbeats = heartbeatConfig.enableHeartbeats ?? true
@@ -98,9 +101,11 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
   const content = enableHeartbeats ? <HeartbeatTouchBoundary>{children}</HeartbeatTouchBoundary> : <>{children}</>
 
   return (
-    <TrackingContext.Provider value={trackingContextValue}>
-      <HeartbeatDebugProvider>{content}</HeartbeatDebugProvider>
-    </TrackingContext.Provider>
+    <DebugLoggerContext.Provider value={{ enableDebugLogging }}>
+      <TrackingContext.Provider value={trackingContextValue}>
+        <HeartbeatDebugProvider>{content}</HeartbeatDebugProvider>
+      </TrackingContext.Provider>
+    </DebugLoggerContext.Provider>
   )
 }
 

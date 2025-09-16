@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, FC, ReactNode, useContext, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 
 import ExpoParsely from '../ExpoParselyModule'
@@ -41,7 +41,7 @@ export const useHeartbeatDebug = () => {
   return { stats, resetStats, scrollState, updateDebugData }
 }
 
-export const HeartbeatDebugProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const HeartbeatDebugProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [debugData, setDebugData] = useState<HeartbeatDebugContextType>({
     stats: {
       isActive: false,
@@ -64,8 +64,6 @@ export const HeartbeatDebugProvider: React.FC<{ children: React.ReactNode }> = (
   return <HeartbeatDebugContext.Provider value={value}>{children}</HeartbeatDebugContext.Provider>
 }
 
-const isDev = __DEV__
-
 const HeartbeatDebugOverlay = () => {
   const { resetStats, stats } = useHeartbeatDebug()
   const [scrollState, setScrollState] = useState(false)
@@ -84,8 +82,6 @@ const HeartbeatDebugOverlay = () => {
 
     return () => clearInterval(interval)
   }, [])
-
-  if (!isDev) return null
 
   return (
     <View

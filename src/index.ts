@@ -22,6 +22,9 @@ export { default } from './ExpoParselyModule'
 // Re-export hooks
 export { useReanimatedHeartbeat } from './hooks/useReanimatedHeartbeat'
 
+// Re-export debug utilities
+export { DebugLoggerContext, createDebugLogger, useDebugLogger } from './utils/debugLogger'
+
 // Re-export components
 export {
   default as HeartbeatDebugOverlay,

@@ -1,33 +1,11 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { AppState, AppStateStatus } from 'react-native'
-
-// Try to import Reanimated, but gracefully handle if it's not available
-let useSharedValue: any
-let runOnUI: any
-let hasReanimated = false
-
-try {
-  const reanimated = require('react-native-reanimated')
-  useSharedValue = reanimated.useSharedValue
-  runOnUI = reanimated.runOnUI
-  hasReanimated = true
-} catch (error) {
-  // Fallback implementations when Reanimated is not available
-  useSharedValue = (initialValue: any) => ({ value: initialValue })
-  runOnUI = (fn: any) => fn
-  hasReanimated = false
-}
+import { runOnUI, useSharedValue } from 'react-native-reanimated'
 
 import type { HeartbeatConfig } from '../ExpoParsely.types'
 import ExpoParsely from '../ExpoParselyModule'
 import { HeartbeatDebugContext } from '../components/HeartbeatDebugOverlay'
-
-// Simple debug logging function
-const debugLog = (message: string, data?: any) => {
-  if (__DEV__) {
-    console.log(`💓 [Parse.ly Heartbeat] ${message}`, data || '')
-  }
-}
+import { useDebugLogger } from '../utils/debugLogger'
 
 // Default heartbeat configuration (matches Parse.ly engaged-time documentation)
 const DEFAULT_HEARTBEAT_CONFIG: Required<HeartbeatConfig> = {
@@ -45,24 +23,22 @@ const DEFAULT_HEARTBEAT_CONFIG: Required<HeartbeatConfig> = {
 // Internal hook for activity recording only (used by HeartbeatTouchBoundary)
 export const useActivityRecording = () => {
   // Use Reanimated shared values for better performance
-  const isActive = hasReanimated ? useSharedValue(false) : useRef(false)
+  const isActive = useSharedValue(false)
 
   // Record activity (resets inactivity timer) - optimized with Reanimated
   const recordActivity = useCallback(() => {
-    if (hasReanimated) {
-      runOnUI(() => {
-        'worklet'
-        isActive.value = true
-      })()
-    } else {
-      isActive.current = true
-    }
+    runOnUI(() => {
+      'worklet'
+      isActive.value = true
+    })()
   }, [])
 
-  return { recordActivity, isActive: hasReanimated ? isActive.value : isActive.current }
+  return { recordActivity, isActive: isActive.value }
 }
 
 export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) => {
+  const debugLogger = useDebugLogger()
+
   const finalConfig = useMemo(
     () => ({ ...DEFAULT_HEARTBEAT_CONFIG, ...config }),
     [
@@ -81,24 +57,18 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
   // Access debug context to update debug data
   const debugContext = useContext(HeartbeatDebugContext)
 
-  // Use Reanimated shared values for better performance, or regular refs as fallback
-  const heartbeatTimer = hasReanimated
-    ? useSharedValue(null)
-    : useRef<number | null>(null)
-  const lastActivity = hasReanimated ? useSharedValue(Date.now()) : useRef(Date.now())
-  const sessionStart = hasReanimated ? useSharedValue(Date.now()) : useRef(Date.now())
-  const isActive = hasReanimated ? useSharedValue(false) : useRef(false)
-  const lastHeartbeatSent = hasReanimated ? useSharedValue(Date.now()) : useRef(Date.now())
-  const totalEngagedTime = hasReanimated ? useSharedValue(0) : useRef(0)
+  // Use Reanimated shared values for better performance
+  const heartbeatTimer = useSharedValue(null)
+  const lastActivity = useSharedValue(Date.now())
+  const sessionStart = useSharedValue(Date.now())
+  const isActive = useSharedValue(false)
+  const lastHeartbeatSent = useSharedValue(Date.now())
+  const totalEngagedTime = useSharedValue(0)
 
   // Helper functions to access values consistently
-  const getValue = (ref: any) => (hasReanimated ? ref.value : ref.current)
+  const getValue = (ref: any) => ref.value
   const setValue = (ref: any, value: any) => {
-    if (hasReanimated) {
-      ref.value = value
-    } else {
-      ref.current = value
-    }
+    ref.value = value
   }
 
   // Debug stats tracking
@@ -108,40 +78,43 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
 
   // Record activity (resets inactivity timer) - optimized with Reanimated
   const recordActivity = useCallback(() => {
-    const activityFunction = () => {
+    runOnUI(() => {
+      'worklet'
       const now = Date.now()
-      const previousActivity = getValue(lastActivity)
-      const timeSincePrevious = now - previousActivity
 
       // Fast path: immediate shared value updates on UI thread
-      const wasActive = getValue(isActive)
-      setValue(lastActivity, now)
+      const wasActive = isActive.value
+      lastActivity.value = now
 
-      setTotalActivities(prev => prev + 1)
+      // Note: setTotalActivities cannot be called directly in worklet
+      // This will be handled outside the worklet
 
       if (!wasActive) {
-        setValue(isActive, true)
-        debugLog('🎯 ACTIVITY DETECTED - SESSION ACTIVATED', {
-          timeSincePrevious: `${timeSincePrevious}ms`,
-          timestamp: now
-        })
-      } else {
-        debugLog('🎯 ACTIVITY RECORDED', {
-          timeSincePrevious: `${timeSincePrevious}ms`,
-          timestamp: now
-        })
+        isActive.value = true
+        // Logging cannot be done in worklet context
       }
-    }
+    })()
 
-    if (hasReanimated) {
-      runOnUI(() => {
-        'worklet'
-        activityFunction()
-      })()
+    // Handle state updates and logging outside worklet
+    const now = Date.now()
+    const previousActivity = lastActivity.value
+    const timeSincePrevious = now - previousActivity
+    const wasActive = isActive.value
+
+    setTotalActivities(prev => prev + 1)
+
+    if (!wasActive) {
+      debugLogger.success('💓 [Parse.ly Heartbeat]', '🎯 ACTIVITY DETECTED - SESSION ACTIVATED', {
+        timeSincePrevious: `${timeSincePrevious}ms`,
+        timestamp: now
+      })
     } else {
-      activityFunction()
+      debugLogger.log('💓 [Parse.ly Heartbeat]', '🎯 ACTIVITY RECORDED', {
+        timeSincePrevious: `${timeSincePrevious}ms`,
+        timestamp: now
+      })
     }
-  }, [hasReanimated])
+  }, [debugLogger])
 
   // Internal heartbeat check function
   const performHeartbeatCheckInternal = useCallback(
@@ -156,8 +129,9 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
       // If currently scrolling, skip inactivity check but continue with heartbeat
       // Parse.ly counts scroll as engagement: https://docs.parse.ly/engaged-time/
       if (currentlyScrolling) {
-        debugLog(
-          'SCROLL ENGAGEMENT - Preventing inactivity check, continuing heartbeat (Parse.ly methodology)'
+        debugLogger.log(
+          '💓 [Parse.ly Heartbeat]',
+          'Scroll engagement - Preventing inactivity check, continuing heartbeat (Parse.ly methodology)'
         )
       }
 
@@ -170,7 +144,7 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
         }
 
         const reason = timeSinceActivity > activeTimeoutMs ? 'inactivity' : 'max duration'
-        debugLog(`💀 HEARTBEAT STOPPED - ${reason}`, {
+        debugLogger.warn('💓 [Parse.ly Heartbeat]', `💀 Heartbeat stopped - ${reason}`, {
           timeSinceActivity: `${timeSinceActivity}ms`,
           totalSessionTime: `${Math.floor((now - getValue(sessionStart)) / 1000)}s`
         })
@@ -193,8 +167,10 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
         finalConfig.onHeartbeat(engagedTimeIncrement)
       }
 
-      debugLog('💓 Sending heartbeat event', { engagedTimeIncrement })
-      debugLog(`⏰ Next heartbeat scheduled in ${intervalMs}ms`)
+      debugLogger.success('💓 [Parse.ly Heartbeat]', '💓 Sending heartbeat event', {
+        engagedTimeIncrement
+      })
+      debugLogger.info('💓 [Parse.ly Heartbeat]', `⏰ Next heartbeat scheduled in ${intervalMs}ms`)
 
       // Schedule next heartbeat check using Parse.ly interval
       setValue(heartbeatTimer, setTimeout(performHeartbeatCheck, intervalMs))
@@ -212,41 +188,37 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
   const startHeartbeat = useCallback(
     async (url?: string) => {
       if (!finalConfig.enableHeartbeats) {
-        debugLog('Heartbeats disabled - not starting tracking')
+        debugLogger.log('💓 [Parse.ly Heartbeat]', 'Heartbeats disabled - not starting tracking')
         return
       }
 
       try {
         // Start engagement tracking with Parse.ly SDK
+        // FIXME: Check if url is required
         if (url) {
           await ExpoParsely.startEngagement(url)
-          debugLog('Started engagement tracking for URL:', url)
+          debugLogger.log('💓 [Parse.ly Heartbeat]', 'Started engagement tracking for URL:', url)
         } else {
-          debugLog('Started heartbeat without URL - manual engagement tracking required')
+          debugLogger.log(
+            '💓 [Parse.ly Heartbeat]',
+            'Started heartbeat without URL - manual engagement tracking required'
+          )
         }
 
-        const initFunction = () => {
-          setValue(isActive, true)
-          setValue(sessionStart, Date.now())
-          setValue(lastActivity, Date.now())
-        }
-
-        if (hasReanimated) {
-          runOnUI(() => {
-            'worklet'
-            initFunction()
-          })()
-        } else {
-          initFunction()
-        }
+        runOnUI(() => {
+          'worklet'
+          isActive.value = true
+          sessionStart.value = Date.now()
+          lastActivity.value = Date.now()
+        })()
 
         // Start the heartbeat loop
         performHeartbeatCheck()
       } catch (error) {
-        console.error('Failed to start heartbeat:', error)
+        debugLogger.error('💓 [Parse.ly Heartbeat]', 'Failed to start heartbeat:', error)
       }
     },
-    [finalConfig, performHeartbeatCheck, hasReanimated]
+    [finalConfig, performHeartbeatCheck, debugLogger]
   )
 
   // Stop heartbeat tracking
@@ -257,36 +229,31 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
       // Stop engagement tracking with Parse.ly SDK
       await ExpoParsely.stopEngagement()
 
-      const stopFunction = () => {
-        setValue(isActive, false)
-        const currentTimer = getValue(heartbeatTimer)
+      runOnUI(() => {
+        'worklet'
+        isActive.value = false
+        const currentTimer = heartbeatTimer.value
         if (currentTimer) {
           clearInterval(currentTimer)
-          setValue(heartbeatTimer, null)
+          heartbeatTimer.value = null
         }
-      }
-
-      if (hasReanimated) {
-        runOnUI(() => {
-          'worklet'
-          stopFunction()
-        })()
-      } else {
-        stopFunction()
-      }
+      })()
     } catch (error) {
-      console.error('Failed to stop heartbeat:', error)
+      debugLogger.error('💓 [Parse.ly Heartbeat]', 'Failed to stop heartbeat:', error)
     }
-  }, [finalConfig, hasReanimated])
+  }, [finalConfig, debugLogger])
 
   // Handle app state changes
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'background') {
-        debugLog('App going to background - stopping heartbeat')
+        debugLogger.log('💓 [Parse.ly Heartbeat]', 'App going to background - stopping heartbeat')
         stopHeartbeat()
       } else if (nextAppState === 'active' && !getValue(isActive)) {
-        debugLog('App coming to foreground - restarting heartbeat')
+        debugLogger.log(
+          '💓 [Parse.ly Heartbeat]',
+          'App coming to foreground - restarting heartbeat'
+        )
         startHeartbeat()
       }
     }
@@ -294,11 +261,11 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
     const subscription = AppState.addEventListener('change', handleAppStateChange)
 
     return () => {
-      debugLog('useEffect cleanup - stopping heartbeat')
+      debugLogger.log('💓 [Parse.ly Heartbeat]', 'useEffect cleanup - stopping heartbeat')
       subscription.remove()
       stopHeartbeat()
     }
-  }, [startHeartbeat, stopHeartbeat])
+  }, [startHeartbeat, stopHeartbeat, debugLogger])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -324,16 +291,15 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
   const resetStats = useCallback(() => {
     setTotalActivities(0)
     setTotalHeartbeats(0)
-    debugLog('💓 [HeartbeatDebug] Reset stats requested')
-  }, [])
+    debugLogger.debug('💓 [Parse.ly Heartbeat]', '💓 [HeartbeatDebug] Reset stats requested')
+  }, [debugLogger])
 
   // Manual activity recording with logging
   const globalRecordActivity = useCallback(() => {
-    if (!finalConfig.enableHeartbeats) return // Skip if heartbeats disabled
-
-    debugLog('Manual activity recorded from external call')
+    if (!finalConfig.enableHeartbeats) return
+    debugLogger.log('💓 [Parse.ly Heartbeat]', 'Manual activity recorded from external call')
     recordActivity()
-  }, [finalConfig.enableHeartbeats, recordActivity])
+  }, [finalConfig.enableHeartbeats, recordActivity, debugLogger])
 
   // Update debug context when stats change
   useEffect(() => {
@@ -368,8 +334,8 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
 
   // Log hook initialization
   useEffect(() => {
-    debugLog('Hook initialized with config:', finalConfig)
-  }, [finalConfig])
+    debugLogger.log('💓 [Parse.ly Heartbeat]', 'Hook initialized with config:', finalConfig)
+  }, [finalConfig, debugLogger])
 
   // Poll scroll state for debug overlay
   useEffect(() => {
@@ -377,14 +343,14 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
       try {
         const scrolling = await ExpoParsely.isCurrentlyScrolling()
         setScrollState(scrolling)
-      } catch (error) {
+      } catch {
         // Fallback if method not implemented yet
         setScrollState(false)
       }
     }, 100)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [debugLogger])
 
   // Expose debug information for HeartbeatDebugOverlay
   const getDebugInfo = useCallback(
@@ -403,10 +369,10 @@ export const useReanimatedHeartbeat = (config: Partial<HeartbeatConfig> = {}) =>
     stopHeartbeat,
     recordActivity: globalRecordActivity,
     isHeartbeatActive,
-    isActive: isActive.value,
-    setVideoPlaying, // Parse.ly video tracking
-    totalEngagedTime: totalEngagedTime.value,
-    getDebugInfo, // Debug information for overlay
+    isActive,
+    setVideoPlaying,
+    totalEngagedTime,
+    getDebugInfo,
     config: finalConfig
   }
 }

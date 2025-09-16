@@ -3,6 +3,7 @@ import { GestureResponderEvent, View } from 'react-native'
 
 import type { HeartbeatTouchBoundaryProps } from '../ExpoParsely.types'
 import ExpoParsely from '../ExpoParselyModule'
+import { useDebugLogger } from '../utils/debugLogger'
 
 let isGloballyScrolling = false
 export const isCurrentlyScrolling = isGloballyScrolling
@@ -16,15 +17,13 @@ interface HeartbeatTouchBoundaryInternalProps extends HeartbeatTouchBoundaryProp
 }
 
 export const HeartbeatTouchBoundary: React.FC<HeartbeatTouchBoundaryInternalProps> = ({ children }) => {
-  const isDev = __DEV__
+  const debugLogger = useDebugLogger()
 
   // Record activity function - calls Parse.ly native recordActivity method
   const recordActivity = useCallback(() => {
-    if (isDev) {
-      console.log('🎯 [HeartbeatTouchBoundary] Recording activity with Parse.ly')
-    }
+    debugLogger.log('🎯 [HeartbeatTouchBoundary]', 'Recording activity with Parse.ly')
     ExpoParsely.recordActivity()
-  }, [])
+  }, [debugLogger])
 
   const lastTouchMoveTime = useRef(0)
   const touchStartY = useRef(0)
@@ -43,12 +42,10 @@ export const HeartbeatTouchBoundary: React.FC<HeartbeatTouchBoundaryInternalProp
       touchState.current.isScrolling = false
       isGloballyScrolling = false
 
-      if (isDev) {
-        console.log('🎯 [HeartbeatTouchBoundary] Touch start - recording activity')
-      }
+      debugLogger.success('🎯 [HeartbeatTouchBoundary]', 'Touch start - recording activity')
       recordActivity()
     },
-    [isDev, recordActivity]
+    [debugLogger, recordActivity]
   )
 
   const _onTouchMove = useCallback(
@@ -68,30 +65,24 @@ export const HeartbeatTouchBoundary: React.FC<HeartbeatTouchBoundaryInternalProp
           clearTimeout(scrollTimeoutId.current)
         }
         scrollTimeoutId.current = setTimeout(() => {
-          if (isDev) {
-            console.log('🎯 [HeartbeatTouchBoundary] Scroll timeout - resetting state')
-          }
+          debugLogger.log('🎯 [HeartbeatTouchBoundary]', 'Scroll timeout - resetting state')
           isGloballyScrolling = false
           touchState.current.isScrolling = false
         }, SCROLL_TIMEOUT_MS)
 
-        if (isDev) {
-          console.log('🎯 [HeartbeatTouchBoundary] Scrolling detected - recording activity')
-        }
+        debugLogger.info('🎯 [HeartbeatTouchBoundary]', 'Scrolling detected - recording activity')
       }
 
       // Record activity for scroll and non-scroll movements (Parse.ly tracks scroll as engagement)
       // But throttle to prevent excessive events
       const currentTime = Date.now()
       if (currentTime - lastTouchMoveTime.current >= TOUCH_MOVE_THROTTLE_MS) {
-        if (isDev) {
-          console.log('🎯 [HeartbeatTouchBoundary] Touch move - recording activity (throttled)')
-        }
+        debugLogger.debug('🎯 [HeartbeatTouchBoundary]', 'Touch move - recording activity (throttled)')
         recordActivity()
         lastTouchMoveTime.current = currentTime
       }
     },
-    [isDev, recordActivity]
+    [debugLogger, recordActivity]
   )
 
   const _onTouchEnd = useCallback((): void => {
@@ -102,14 +93,12 @@ export const HeartbeatTouchBoundary: React.FC<HeartbeatTouchBoundaryInternalProp
     }
 
     if (touchState.current.isScrolling || isGloballyScrolling) {
-      if (isDev) {
-        console.log('🎯 [HeartbeatTouchBoundary] Touch ended - resetting scroll state')
-      }
+      debugLogger.log('🎯 [HeartbeatTouchBoundary]', 'Touch ended - resetting scroll state')
     }
 
     touchState.current.isScrolling = false
     isGloballyScrolling = false
-  }, [isDev])
+  }, [debugLogger])
 
   React.useEffect(() => {
     return () => {
