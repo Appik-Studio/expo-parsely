@@ -1,6 +1,8 @@
 package expo.modules.parsely
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.parsely.parselyandroid.ParselyTracker
 import com.parsely.parselyandroid.ParselyMetadata
 import com.parsely.parselyandroid.ParselyVideoMetadata
@@ -9,6 +11,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 
 class ExpoParselyModule : Module() {
   private var parselyTracker: ParselyTracker? = null
+  private val mainHandler = Handler(Looper.getMainLooper())
 
   override fun definition() = ModuleDefinition {
     Name("ExpoParsely")
@@ -16,8 +19,10 @@ class ExpoParselyModule : Module() {
     // Configure the Parsely tracker
     Function("init") { siteId: String ->
       val context = appContext.reactContext ?: throw IllegalStateException("React context is null")
-      ParselyTracker.init(siteId, 30, context, false)
-      parselyTracker = ParselyTracker.sharedInstance()
+      mainHandler.post {
+        ParselyTracker.init(siteId, 30, context, false)
+        parselyTracker = ParselyTracker.sharedInstance()
+      }
     }
 
     // Track page view
@@ -31,8 +36,10 @@ class ExpoParselyModule : Module() {
       val metadata = options["metadata"]?.let { createParselyMetadata(it as Map<String, Any?>) }
       val extraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
 
-      // Use basic tracking call for v4.x SDK compatibility
-      parselyTracker?.trackPageview(url, urlref, metadata, extraData as Map<String, Any>?)
+      mainHandler.post {
+          // Use basic tracking call for v4.x SDK compatibility
+        parselyTracker?.trackPageview(url, urlref, metadata, extraData as Map<String, Any>?)
+      }
     }
 
     // Engagement tracking
@@ -43,11 +50,15 @@ class ExpoParselyModule : Module() {
       val urlref = options["urlref"] as? String ?: ""
       val extraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
 
-      parselyTracker?.startEngagement(url, urlref, extraData as Map<String, Any>?)
+      mainHandler.post {
+        parselyTracker?.startEngagement(url, urlref, extraData as Map<String, Any>?)
+      }
     }
 
     Function("stopEngagement") {
-      parselyTracker?.stopEngagement()
+      mainHandler.post {
+        parselyTracker?.stopEngagement()
+      }
     }
 
     // Video tracking (simplified for compatibility)
@@ -60,28 +71,39 @@ class ExpoParselyModule : Module() {
       val mergedExtraData = mutableMapOf<String, Any?>()
       mergedExtraData.putAll(extraData)
       mergedExtraData["video_play"] = true
-      parselyTracker?.trackPageview(url, urlref, null, mergedExtraData as Map<String, Any>?)
+
+      mainHandler.post {
+        parselyTracker?.trackPageview(url, urlref, null, mergedExtraData as Map<String, Any>?)
+      }
     }
 
     Function("trackPause") {
-      parselyTracker?.trackPause()
+      mainHandler.post {
+        parselyTracker?.trackPause()
+      }
     }
 
     Function("resetVideo") {
-      parselyTracker?.resetVideo()
+      mainHandler.post {
+        parselyTracker?.resetVideo()
+      }
     }
 
     // Heartbeat management
     Function("startHeartbeat") { config: Map<String, Any?>? ->
       ensureTrackerInitialized()
 
-      // For now, delegate to startEngagement with default URL
+      mainHandler.post {
+          // For now, delegate to startEngagement with default URL
       // In a more advanced implementation, this could manage custom heartbeat timers
-      parselyTracker?.startEngagement("app://heartbeat", "", emptyMap())
+        parselyTracker?.startEngagement("app://heartbeat", "", emptyMap())
+      }
     }
 
     Function("stopHeartbeat") {
-      parselyTracker?.stopEngagement()
+      mainHandler.post {
+        parselyTracker?.stopEngagement()
+      }
     }
   }
 
