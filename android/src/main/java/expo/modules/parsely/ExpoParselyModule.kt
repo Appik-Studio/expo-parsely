@@ -12,16 +12,21 @@ import expo.modules.kotlin.modules.ModuleDefinition
 class ExpoParselyModule : Module() {
   private var parselyTracker: ParselyTracker? = null
   private val mainHandler = Handler(Looper.getMainLooper())
+  private var isInitialized = false
 
   override fun definition() = ModuleDefinition {
     Name("ExpoParsely")
 
     // Configure the Parsely tracker
     Function("init") { siteId: String ->
+      if (isInitialized) {
+        return@Function
+      }
       val context = appContext.reactContext ?: throw IllegalStateException("React context is null")
       mainHandler.post {
         ParselyTracker.init(siteId, 30, context, false)
         parselyTracker = ParselyTracker.sharedInstance()
+        isInitialized = true
       }
     }
 
