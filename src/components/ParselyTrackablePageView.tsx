@@ -36,7 +36,5 @@ export const ParselyTrackablePageView = ({
     }
   }, [screenName, screenUrl, analyticsContext, trackPageView])
 
-  return <>{children}</>
+  return children
 }
-
-export default ParselyTrackablePageView

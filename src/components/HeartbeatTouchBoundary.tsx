@@ -118,6 +118,7 @@ export const HeartbeatTouchBoundary: React.FC<HeartbeatTouchBoundaryInternalProp
   return (
     <View
       style={{ flex: 1 }}
+      pointerEvents='box-none'
       onTouchCancel={_onTouchCancel}
       onTouchEnd={_onTouchEnd}
       onTouchMove={_onTouchMove}
