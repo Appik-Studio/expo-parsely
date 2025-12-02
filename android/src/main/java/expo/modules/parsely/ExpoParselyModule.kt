@@ -39,7 +39,8 @@ class ExpoParselyModule : Module() {
 
       // Handle metadata if provided
       val metadata = options["metadata"]?.let { createParselyMetadata(it as Map<String, Any?>) }
-      val extraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
+      val rawExtraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
+      val extraData = convertExtraDataValues(rawExtraData)
 
       mainHandler.post {
           // Use basic tracking call for v4.x SDK compatibility
@@ -53,7 +54,8 @@ class ExpoParselyModule : Module() {
 
       val url = options["url"] as? String ?: throw IllegalArgumentException("URL is required")
       val urlref = options["urlref"] as? String ?: ""
-      val extraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
+      val rawExtraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
+      val extraData = convertExtraDataValues(rawExtraData)
 
       mainHandler.post {
         parselyTracker?.startEngagement(url, urlref, extraData as Map<String, Any>?)
@@ -72,7 +74,8 @@ class ExpoParselyModule : Module() {
       // For now, just track as a regular page view with video metadata in extraData
       val url = options["url"] as? String ?: throw IllegalArgumentException("URL is required")
       val urlref = options["urlref"] as? String ?: ""
-      val extraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
+      val rawExtraData = (options["extraData"] as? Map<String, Any?>) ?: emptyMap()
+      val extraData = convertExtraDataValues(rawExtraData)
       val mergedExtraData = mutableMapOf<String, Any?>()
       mergedExtraData.putAll(extraData)
       mergedExtraData["video_play"] = true
@@ -121,6 +124,44 @@ class ExpoParselyModule : Module() {
   private fun createParselyMetadata(dict: Map<String, Any?>): ParselyMetadata {
     // Create basic metadata - properties may be private in current SDK version
     return ParselyMetadata()
+  }
+
+  /**
+   * Converts extraData values from strings to their proper native types.
+   * This is needed because the JS bridge may serialize values as strings.
+   */
+  private fun convertExtraDataValues(data: Map<String, Any?>): Map<String, Any?> {
+    return data.mapValues { (_, value) -> convertValue(value) }
+  }
+
+  private fun convertValue(value: Any?): Any? {
+    return when (value) {
+      is String -> parseStringValue(value)
+      is Map<*, *> -> {
+        @Suppress("UNCHECKED_CAST")
+        convertExtraDataValues(value as Map<String, Any?>)
+      }
+      is List<*> -> value.map { convertValue(it) }
+      else -> value
+    }
+  }
+
+  private fun parseStringValue(value: String): Any {
+    // Try boolean
+    if (value.equals("true", ignoreCase = true)) return true
+    if (value.equals("false", ignoreCase = true)) return false
+
+    // Try integer (Long for larger numbers)
+    value.toLongOrNull()?.let { longVal ->
+      // Return Int if it fits, otherwise Long
+      return if (longVal in Int.MIN_VALUE..Int.MAX_VALUE) longVal.toInt() else longVal
+    }
+
+    // Try double
+    value.toDoubleOrNull()?.let { return it }
+
+    // Keep as string
+    return value
   }
 
 }
