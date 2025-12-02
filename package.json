@@ -1,6 +1,6 @@
 {
   "name": "@appik-studio/expo-parsely",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Enhanced Parse.ly Analytics SDK for React Native and Expo - comprehensive engagement tracking, heartbeat monitoring, and cross-platform analytics",
   "main": "build/index.js",
   "types": "build/index.d.ts",
