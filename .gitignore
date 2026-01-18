@@ -57,3 +57,4 @@ yarn-error.log
 .expo/*
 tsconfig.tsbuildinfo
 bump-version.js
+.claude/settings.local.json

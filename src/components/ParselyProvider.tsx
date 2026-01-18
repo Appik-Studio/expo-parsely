@@ -52,12 +52,11 @@ export const ParselyProvider: React.FC<ParselyProviderProps> = ({
     if (autoInitialize && siteId) {
       try {
         ExpoParsely.init(siteId)
-        debugLogger.success('🔵 [Parse.ly]', 'Parse.ly initialized successfully', { siteId })
       } catch (error) {
-        debugLogger.error('🔵 [Parse.ly]', 'Failed to initialize Parse.ly:', error)
+        console.error('[Parse.ly] Failed to initialize:', error)
       }
     }
-  }, [autoInitialize, siteId, debugLogger])
+  }, [autoInitialize, siteId])
 
   useEffect(() => {
     heartbeatManager.updateConfig(heartbeatConfig)
