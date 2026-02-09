@@ -714,4 +714,5 @@ For issues and questions:
     <a href="https://expo.dev">Expo</a> •
     <a href="https://reactnative.dev">React Native</a>
   </p>
+  <sub>Swiss made by <a href="https://www.appik-studio.ch">Appik Studio</a> 🖤</sub>
 </div>
