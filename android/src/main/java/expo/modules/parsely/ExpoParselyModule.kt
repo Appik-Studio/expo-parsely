@@ -10,9 +10,15 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class ExpoParselyModule : Module() {
+  companion object {
+    // Static flag survives JS bundle reloads (e.g. expo-updates reloadAsync)
+    // to prevent ParselyAlreadyInitializedException on Android
+    @Volatile
+    private var isInitialized = false
+  }
+
   private var parselyTracker: ParselyTracker? = null
   private val mainHandler = Handler(Looper.getMainLooper())
-  private var isInitialized = false
 
   override fun definition() = ModuleDefinition {
     Name("ExpoParsely")
@@ -20,11 +26,16 @@ class ExpoParselyModule : Module() {
     // Configure the Parsely tracker
     Function("init") { siteId: String ->
       if (isInitialized) {
+        parselyTracker = ParselyTracker.sharedInstance()
         return@Function
       }
       val context = appContext.reactContext ?: throw IllegalStateException("React context is null")
       mainHandler.post {
-        ParselyTracker.init(siteId, 30, context, false)
+        try {
+          ParselyTracker.init(siteId, 30, context, false)
+        } catch (_: Exception) {
+          // Already initialized in this process (e.g. after OTA reload)
+        }
         parselyTracker = ParselyTracker.sharedInstance()
         isInitialized = true
       }
