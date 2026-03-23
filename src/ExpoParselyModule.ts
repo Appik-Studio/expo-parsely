@@ -1,6 +1,8 @@
 import { NativeModule, requireNativeModule } from 'expo-modules-core'
 
 import type { CommonParameters, EngagementOptions, PageViewOptions } from './ExpoParsely.types'
+import { getConsentGiven as _getConsentGiven, setConsentGiven as _setConsentGiven } from './utils/consentState'
+import { heartbeatManager } from './utils/HeartbeatManager'
 
 declare class ExpoParselyModule extends NativeModule {
   // Configuration
@@ -29,6 +31,7 @@ const NativeExpoParsely = requireNativeModule<ExpoParselyModule>('ExpoParsely')
 // In-memory storage for common parameters
 let commonParameters: CommonParameters = {}
 
+
 // Helper function to merge common parameters with tracking options
 const mergeCommonParameters = <
   T extends { url?: string; metadata?: any; extraData?: any; siteId?: string }
@@ -56,6 +59,17 @@ class ExpoParselyWrapper {
     return NativeExpoParsely.init(siteId)
   }
 
+  // Enable or disable all tracking based on user consent
+  setConsentGiven(given: boolean): void {
+    _setConsentGiven(given)
+    heartbeatManager.onConsentChanged(given)
+  }
+
+  // Check current consent state
+  getConsentGiven(): boolean {
+    return _getConsentGiven()
+  }
+
   // Set common parameters that will be included with all tracking calls
   setCommonParameters(params: CommonParameters): void {
     commonParameters = { ...params }
@@ -81,6 +95,8 @@ class ExpoParselyWrapper {
     urlOrPathOrOptions: string | PageViewOptions,
     options?: Partial<PageViewOptions>
   ): Promise<void> {
+    if (!_getConsentGiven()) return
+
     let pageViewOptions: PageViewOptions
 
     if (typeof urlOrPathOrOptions === 'string') {
@@ -116,6 +132,8 @@ class ExpoParselyWrapper {
     urlOrOptions: string | EngagementOptions,
     options?: Partial<EngagementOptions>
   ): Promise<void> {
+    if (!_getConsentGiven()) return
+
     let engagementOptions: EngagementOptions
 
     if (typeof urlOrOptions === 'string') {
@@ -141,6 +159,7 @@ class ExpoParselyWrapper {
   }
 
   async stopEngagement(): Promise<void> {
+    if (!_getConsentGiven()) return
     return NativeExpoParsely.stopEngagement()
   }
 

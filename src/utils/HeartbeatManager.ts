@@ -1,5 +1,6 @@
 // Standalone heartbeat manager that operates outside React lifecycle
 import type { HeartbeatConfig } from '../ExpoParsely.types'
+import { getConsentGiven } from './consentState'
 
 class HeartbeatManager {
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -16,6 +17,13 @@ class HeartbeatManager {
   private sessionStart = 0
   private lastActivity = 0
   private heartbeatCount = 0
+  onConsentChanged(given: boolean) {
+    if (given && !this.isActive) {
+      this.start()
+    } else if (!given && this.isActive) {
+      this.stop()
+    }
+  }
 
   updateConfig(config: Partial<HeartbeatConfig>) {
     this.config = { ...this.config, ...config }
@@ -23,6 +31,7 @@ class HeartbeatManager {
 
   start() {
     if (this.isActive || !this.config.enableHeartbeats) return
+    if (!getConsentGiven()) return
     const now = Date.now()
     this.isActive = true
     this.sessionStart = now
@@ -57,7 +66,10 @@ class HeartbeatManager {
   }
 
   private sendHeartbeat() {
-    if (!this.isActive) return
+    if (!this.isActive || !getConsentGiven()) {
+      this.stop()
+      return
+    }
 
     const now = Date.now()
     const timeSinceActivity = now - this.lastActivity
