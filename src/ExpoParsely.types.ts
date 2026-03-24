@@ -46,25 +46,6 @@ export interface PageViewOptions {
   data?: Record<string, any>
 }
 
-// Engagement tracking options
-export interface EngagementOptions {
-  url: string
-  urlref?: string
-  extraData?: Record<string, any>
-  siteId?: string
-}
-
-// Video tracking options
-export interface VideoOptions {
-  url: string
-  urlref?: string
-  videoID: string
-  duration: number
-  metadata?: ParselyMetadata
-  extraData?: Record<string, any>
-  siteId?: string
-}
-
 // Tracking Context for overall app tracking
 export interface TrackingContextValue {
   trackPageView: (context?: Partial<Record<string, any>>) => void
@@ -91,17 +72,6 @@ export interface ParselyProviderProps {
   activityDetectionConfig?: Partial<ActivityDetectionConfig>
 }
 
-// TrackableScreen props
-export interface TrackableScreenProps {
-  screenName: string
-  screenUrl?: string
-  analyticsContext?: Record<string, any>
-  children?: React.ReactNode
-}
-
-// ParselyTrackablePageView props (alias for TrackableScreenProps)
-export type ParselyTrackablePageViewProps = TrackableScreenProps
-
 // HeartbeatTouchBoundary props
 export interface HeartbeatTouchBoundaryProps {
   children?: React.ReactNode
@@ -122,5 +92,3 @@ export interface HeartbeatDebugInfo {
   sessionStart: number
 }
 
-// Re-export React types that are used
-export type { ReactNode } from 'react'

@@ -1,6 +1,6 @@
 import { NativeModule, requireNativeModule } from 'expo-modules-core'
 
-import type { CommonParameters, EngagementOptions, PageViewOptions } from './ExpoParsely.types'
+import type { CommonParameters, PageViewOptions } from './ExpoParsely.types'
 import { getConsentGiven as _getConsentGiven, setConsentGiven as _setConsentGiven } from './utils/consentState'
 import { heartbeatManager } from './utils/HeartbeatManager'
 
@@ -10,20 +10,6 @@ declare class ExpoParselyModule extends NativeModule {
 
   // Page view tracking - single method like iOS SDK
   trackPageView(options: PageViewOptions): Promise<void>
-
-  // Engagement tracking (heartbeat)
-  startEngagement(options: EngagementOptions): Promise<void>
-  stopEngagement(): Promise<void>
-
-  // Debug methods
-  getHeartbeatStatus(): Promise<{
-    isActive: boolean
-    lastActivity: number
-    sessionDuration: number
-    totalActivities: number
-    totalHeartbeats: number
-  }>
-  isCurrentlyScrolling(): Promise<boolean>
 }
 
 const NativeExpoParsely = requireNativeModule<ExpoParselyModule>('ExpoParsely')
@@ -122,75 +108,6 @@ class ExpoParselyWrapper {
     return NativeExpoParsely.trackPageView(mergedOptions)
   }
 
-  // Engagement tracking (heartbeat) with automatic common parameters merging
-  // Overload 1: URL as first parameter, options as second parameter
-  async startEngagement(url: string, options?: Partial<EngagementOptions>): Promise<void>
-  // Overload 2: Options object only (must contain url property)
-  async startEngagement(options: EngagementOptions): Promise<void>
-  // Implementation
-  async startEngagement(
-    urlOrOptions: string | EngagementOptions,
-    options?: Partial<EngagementOptions>
-  ): Promise<void> {
-    if (!_getConsentGiven()) return
-
-    let engagementOptions: EngagementOptions
-
-    if (typeof urlOrOptions === 'string') {
-      // First overload: URL as first parameter
-      engagementOptions = { url: urlOrOptions }
-
-      // Merge with provided options if any
-      if (options) {
-        engagementOptions = {
-          ...engagementOptions,
-          ...options,
-          // Ensure URL from first parameter takes precedence
-          url: urlOrOptions
-        }
-      }
-    } else {
-      // Second overload: Options object only
-      engagementOptions = urlOrOptions
-    }
-
-    const mergedOptions = mergeCommonParameters(engagementOptions)
-    return NativeExpoParsely.startEngagement(mergedOptions)
-  }
-
-  async stopEngagement(): Promise<void> {
-    if (!_getConsentGiven()) return
-    return NativeExpoParsely.stopEngagement()
-  }
-
-  // Debug methods
-  async getHeartbeatStatus() {
-    return NativeExpoParsely.getHeartbeatStatus()
-  }
-
-  async isCurrentlyScrolling() {
-    return NativeExpoParsely.isCurrentlyScrolling()
-  }
-
-  // Record activity (placeholder for compatibility with existing code)
-  recordActivity(): void {
-    // This method is used by HeartbeatTouchBoundary and other components
-    // The actual activity recording is handled by the native module
-    // This is just a placeholder to maintain API compatibility
-  }
-
-  // Parse.ly video tracking support
-  private _videoPlaying: boolean = false
-
-  get videoPlaying(): boolean {
-    return this._videoPlaying
-  }
-
-  set videoPlaying(playing: boolean) {
-    this._videoPlaying = playing
-    // In a full implementation, this would notify the native module
-    // For now, this maintains Parse.ly API compatibility
-  }
 }
 
 const ExpoParsely = new ExpoParselyWrapper()

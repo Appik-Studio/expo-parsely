@@ -2,7 +2,6 @@
 export type {
   ActivityDetectionConfig,
   CommonParameters,
-  EngagementOptions,
   HeartbeatConfig,
   HeartbeatDebugInfo,
   HeartbeatDebugOverlayProps,
@@ -10,10 +9,7 @@ export type {
   PageViewOptions,
   ParselyMetadata,
   ParselyProviderProps,
-  ParselyTrackablePageViewProps,
-  TrackableScreenProps,
-  TrackingContextValue,
-  VideoOptions
+  TrackingContextValue
 } from './ExpoParsely.types'
 
 // Re-export the native module
@@ -31,8 +27,6 @@ export {
   HeartbeatDebugProvider
 } from './components/HeartbeatDebugOverlay'
 
-// Re-export store
 export { HeartbeatTouchBoundary, isCurrentlyScrolling } from './components/HeartbeatTouchBoundary'
 export { ParselyProvider, useTrackingContext } from './components/ParselyProvider'
-export { ParselyTrackablePageView } from './components/ParselyTrackablePageView'
 export { heartbeatDebugStore, useHeartbeatDebugStore } from './stores/heartbeatDebugStore'
