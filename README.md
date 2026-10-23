@@ -652,6 +652,8 @@ bun run open:android
 
 ### Testing Local Changes
 
+The example app in `example/` uses Metro port 8092. Use `bun run start`, `bun run dev`, `bun run ios`, or `bun run android` from that directory.
+
 ```bash
 # Link the local package
 cd example
